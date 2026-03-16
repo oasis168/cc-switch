@@ -20,10 +20,41 @@ pub async fn get_settings() -> Result<crate::settings::AppSettings, String> {
 
 /// 保存设置
 #[tauri::command]
-pub async fn save_settings(settings: crate::settings::AppSettings) -> Result<bool, String> {
+pub async fn save_settings(
+    settings: crate::settings::AppSettings,
+    state: tauri::State<'_, crate::store::AppState>,
+) -> Result<bool, String> {
     let existing = crate::settings::get_settings();
+    let just_enabled = !existing.enable_claude_plugin_integration && settings.enable_claude_plugin_integration;
     let merged = merge_settings_for_save(settings, &existing);
     crate::settings::update_settings(merged).map_err(|e| e.to_string())?;
+
+    // 开关从 off -> on：写入 claude config + 同步当前供应商到 IDE
+    if just_enabled {
+        if let Err(e) = crate::claude_plugin::write_claude_config() {
+            log::warn!("[Settings] 写入 claude config 失败: {e}");
+        }
+        let app_settings = crate::settings::get_settings();
+        if let Ok(Some(id)) = crate::settings::get_effective_current_provider(state.db.as_ref(), &crate::app_config::AppType::Claude) {
+            if let Ok(all) = state.db.get_all_providers(crate::app_config::AppType::Claude.as_str()) {
+                if let Some(provider) = all.get(&id) {
+                    let (token, base_url) = if app_settings.enable_local_proxy {
+                        let port = crate::proxy::http_client::get_cc_switch_proxy_port();
+                        ("proxy-placeholder".to_string(), format!("http://127.0.0.1:{port}"))
+                    } else {
+                        let env = provider.settings_config.get("env");
+                        let token = env.and_then(|e: &serde_json::Value| e.get("ANTHROPIC_AUTH_TOKEN")).and_then(|v: &serde_json::Value| v.as_str()).unwrap_or("").to_string();
+                        let base_url = env.and_then(|e: &serde_json::Value| e.get("ANTHROPIC_BASE_URL")).and_then(|v: &serde_json::Value| v.as_str()).unwrap_or("").to_string();
+                        (token, base_url)
+                    };
+                    if let Err(e) = crate::vscode_settings::update_claude_env_vars(&token, &base_url) {
+                        log::warn!("[Settings] 同步 IDE 配置失败: {e}");
+                    }
+                }
+            }
+        }
+    }
+
     Ok(true)
 }
 
