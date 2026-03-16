@@ -35,23 +35,24 @@ pub async fn save_settings(
             log::warn!("[Settings] 写入 claude config 失败: {e}");
         }
         let app_settings = crate::settings::get_settings();
-        if let Ok(Some(id)) = crate::settings::get_effective_current_provider(state.db.as_ref(), &crate::app_config::AppType::Claude) {
-            if let Ok(all) = state.db.get_all_providers(crate::app_config::AppType::Claude.as_str()) {
-                if let Some(provider) = all.get(&id) {
-                    let (token, base_url) = if app_settings.enable_local_proxy {
-                        let port = crate::proxy::http_client::get_cc_switch_proxy_port();
-                        ("proxy-placeholder".to_string(), format!("http://127.0.0.1:{port}"))
-                    } else {
+        // 代理已开启时跳过 IDE 同步，避免触发 IDE 重启
+        let proxy_running = state.proxy_service.is_running().await;
+        if !proxy_running {
+            if let Ok(Some(id)) = crate::settings::get_effective_current_provider(state.db.as_ref(), &crate::app_config::AppType::Claude) {
+                if let Ok(all) = state.db.get_all_providers(crate::app_config::AppType::Claude.as_str()) {
+                    if let Some(provider) = all.get(&id) {
                         let env = provider.settings_config.get("env");
                         let token = env.and_then(|e: &serde_json::Value| e.get("ANTHROPIC_AUTH_TOKEN")).and_then(|v: &serde_json::Value| v.as_str()).unwrap_or("").to_string();
                         let base_url = env.and_then(|e: &serde_json::Value| e.get("ANTHROPIC_BASE_URL")).and_then(|v: &serde_json::Value| v.as_str()).unwrap_or("").to_string();
-                        (token, base_url)
-                    };
-                    if let Err(e) = crate::vscode_settings::update_claude_env_vars(&token, &base_url) {
-                        log::warn!("[Settings] 同步 IDE 配置失败: {e}");
+                        if let Err(e) = crate::vscode_settings::update_claude_env_vars(&token, &base_url) {
+                            log::warn!("[Settings] 同步 IDE 配置失败: {e}");
+                        }
                     }
                 }
             }
+        } else {
+            log::info!("[Settings] 代理已启动，跳过 IDE 同步");
+            let _ = app_settings; // 消除未使用警告
         }
     }
 

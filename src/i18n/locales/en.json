@@ -463,6 +463,7 @@
     "minimizeToTrayDescription": "When checked, clicking the close button will hide to system tray, otherwise the app will exit directly.",
     "enableClaudePluginIntegration": "Apply to Claude Code extension",
     "enableClaudePluginIntegrationDescription": "When enabled, the VS Code Claude Code extension provider will switch with this app",
+    "enableClaudePluginIntegrationFirstTimeHint": "After enabling for the first time, restart your IDE for changes to take effect",
     "vscodeSettingsPath": "IDE settings.json path",
     "vscodeSettingsPathHint": "Leave empty to auto-detect based on IDE type",
     "vscodeSettingsPathDetected": "Path detected",

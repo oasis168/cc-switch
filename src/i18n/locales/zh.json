@@ -463,6 +463,7 @@
     "minimizeToTrayDescription": "勾选后点击关闭按钮会隐藏到系统托盘，取消则直接退出应用。",
     "enableClaudePluginIntegration": "应用到 Claude Code 插件",
     "enableClaudePluginIntegrationDescription": "开启后 Vscode Claude Code 插件的供应商将随本软件切换",
+    "enableClaudePluginIntegrationFirstTimeHint": "首次启用后需重启 IDE 才能生效",
     "vscodeSettingsPath": "IDE 配置文件路径",
     "vscodeSettingsPathHint": "留空将按所选 IDE 类型自动探测路径",
     "vscodeSettingsPathDetected": "已探测到路径",

@@ -93,6 +93,12 @@ export function WindowSettings({ settings, onChange }: WindowSettingsProps) {
           }
         />
 
+        {settings.enableClaudePluginIntegration && (
+          <div className="ml-6 text-xs text-amber-600 dark:text-amber-400">
+            {t("settings.enableClaudePluginIntegrationFirstTimeHint")}
+          </div>
+        )}
+
         <AnimatePresence initial={false}>
           {settings.enableClaudePluginIntegration && (
             <motion.div
