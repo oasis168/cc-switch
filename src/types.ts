@@ -291,6 +291,12 @@ export interface Settings {
   // Windows: "cmd" | "powershell" | "wt"
   // Linux: "gnome-terminal" | "konsole" | "xfce4-terminal" | "alacritty" | "kitty" | "ghostty"
   preferredTerminal?: string;
+
+  // ===== IDE 插件设置 =====
+  // IDE 类型："vscode"（默认）| "cursor" | "windsurf"
+  ideType?: string;
+  // IDE settings.json 自定义路径（留空则按 ideType 自动探测）
+  vscodeSettingsPath?: string;
 }
 
 export interface SessionMeta {
@@ -549,3 +555,11 @@ export interface OpenClawToolsConfig {
   deny?: string[];
   [key: string]: unknown; // preserve unknown fields
 }
+
+// VSCode/Cursor/Windsurf 配置匹配状态
+export type VscodeConfigStatus =
+  | { status: "ok" }
+  | { status: "notFound" }
+  | { status: "integrationDisabled" }
+  | { status: "proxyNotRunning"; baseUrl: string }
+  | { status: "mismatch"; currentBaseUrl: string; vscodeBaseUrl: string };

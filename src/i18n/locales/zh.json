@@ -463,6 +463,19 @@
     "minimizeToTrayDescription": "勾选后点击关闭按钮会隐藏到系统托盘，取消则直接退出应用。",
     "enableClaudePluginIntegration": "应用到 Claude Code 插件",
     "enableClaudePluginIntegrationDescription": "开启后 Vscode Claude Code 插件的供应商将随本软件切换",
+    "vscodeSettingsPath": "IDE 配置文件路径",
+    "vscodeSettingsPathHint": "留空将按所选 IDE 类型自动探测路径",
+    "vscodeSettingsPathDetected": "已探测到路径",
+    "vscodeSettingsPathNotFound": "未探测到配置文件",
+    "syncVscodeSettings": "立即同步到 IDE",
+    "syncVscodeSettingsSuccess": "已同步到 IDE settings.json",
+    "syncVscodeSettingsFailed": "同步 IDE 配置失败",
+    "vscodeDirectModeHint": "关闭本地代理时，将直接把真实 Key 写入 IDE 配置（直连模式）",
+    "ideType": "IDE 类型",
+    "ideTypeDescription": "选择需要同步配置的编辑器（开启插件联动后生效）",
+    "ideTypeVscode": "VSCode",
+    "ideTypeCursor": "Cursor",
+    "ideTypeWindsurf": "Windsurf",
     "skipClaudeOnboarding": "跳过 Claude Code 初次安装确认",
     "skipClaudeOnboardingDescription": "开启后跳过 Claude Code 初次安装确认",
     "toolSearchBypass": "解除 Tool Search 域名限制",
@@ -2199,5 +2212,9 @@
     },
     "suggestedDefaults": "应用建议默认配置",
     "suggestedDefaultsHint": "使用此预设推荐的默认模型配置"
+  },
+  "vscodeStatus": {
+    "proxyNotRunning": "IDE 插件指向代理，但代理未启动，请先开启本地代理",
+    "mismatch": "IDE 插件配置与当前供应商不匹配，建议点击\"立即同步到 IDE\"手动同步"
   }
 }

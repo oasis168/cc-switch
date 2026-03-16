@@ -456,6 +456,40 @@ function App() {
     checkSkillsMigration();
   }, [t, queryClient]);
 
+  // 监听启动时 VSCode/Cursor/Windsurf 配置状态检测事件
+  useEffect(() => {
+    let unsubscribe: (() => void) | undefined;
+
+    const setupListener = async () => {
+      try {
+        const { listen: listenEvent } = await import("@tauri-apps/api/event");
+        unsubscribe = await listenEvent<{ status: string; baseUrl?: string; currentBaseUrl?: string; vscodeBaseUrl?: string }>("vscode-config-status", (event) => {
+          const s = event.payload;
+          if (s.status === "proxyNotRunning") {
+            toast.warning(
+              t("vscodeStatus.proxyNotRunning", { defaultValue: "IDE 插件指向代理，但代理未启动，请先开启本地代理" }),
+              { closeButton: true, duration: 8000 }
+            );
+          } else if (s.status === "mismatch") {
+            toast.warning(
+              t("vscodeStatus.mismatch", {
+                defaultValue: "IDE 插件配置与当前供应商不匹配，建议手动同步",
+              }),
+              { closeButton: true, duration: 8000 }
+            );
+          }
+        });
+      } catch (error) {
+        console.error("[App] Failed to subscribe vscode-config-status event", error);
+      }
+    };
+
+    setupListener();
+    return () => {
+      unsubscribe?.();
+    };
+  }, [t]);
+
   useEffect(() => {
     const checkEnvOnSwitch = async () => {
       try {

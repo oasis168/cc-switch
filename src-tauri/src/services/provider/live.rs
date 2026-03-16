@@ -655,6 +655,38 @@ pub(crate) fn write_live_snapshot(app_type: &AppType, provider: &Provider) -> Re
             let path = get_claude_settings_path();
             let settings = sanitize_claude_settings_for_live(&provider.settings_config);
             write_json_file(&path, &settings)?;
+
+            // 如果启用了 Claude 插件联动，同步写 VSCode settings.json
+            let app_settings = crate::settings::get_settings();
+            if app_settings.enable_claude_plugin_integration {
+                let (token, base_url) = if app_settings.enable_local_proxy {
+                    // 代理模式：写占位符
+                    let port = crate::proxy::http_client::get_cc_switch_proxy_port();
+                    (
+                        "proxy-placeholder".to_string(),
+                        format!("http://127.0.0.1:{port}"),
+                    )
+                } else {
+                    // 直连模式：从 settings_config.env 中提取真实 token 和 URL
+                    let env = provider.settings_config.get("env");
+                    let token = env
+                        .and_then(|e| e.get("ANTHROPIC_AUTH_TOKEN"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    let base_url = env
+                        .and_then(|e| e.get("ANTHROPIC_BASE_URL"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    (token, base_url)
+                };
+                if !token.is_empty() || !base_url.is_empty() {
+                    if let Err(e) = crate::vscode_settings::update_claude_env_vars(&token, &base_url) {
+                        log::warn!("[VSCodeSettings] 同步失败: {e}");
+                    }
+                }
+            }
         }
         AppType::Codex => {
             let obj = provider

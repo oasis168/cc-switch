@@ -3,6 +3,14 @@ import type { SettingsFormState } from "@/hooks/useSettings";
 import { AppWindow, MonitorUp, Power, EyeOff, Search } from "lucide-react";
 import { ToggleRow } from "@/components/ui/toggle-row";
 import { AnimatePresence, motion } from "framer-motion";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 interface WindowSettingsProps {
   settings: SettingsFormState;
@@ -57,6 +65,36 @@ export function WindowSettings({ settings, onChange }: WindowSettingsProps) {
             onChange({ enableClaudePluginIntegration: value })
           }
         />
+
+        <AnimatePresence initial={false}>
+          {settings.enableClaudePluginIntegration && (
+            <motion.div
+              key="ide-type-select"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              transition={{ duration: 0.3 }}
+              className="ml-6 flex flex-col gap-1"
+            >
+              <Label className="text-xs text-muted-foreground">
+                {t("settings.ideTypeDescription")}
+              </Label>
+              <Select
+                value={settings.ideType ?? "vscode"}
+                onValueChange={(value) => onChange({ ideType: value })}
+              >
+                <SelectTrigger className="w-48 h-8 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="vscode">{t("settings.ideTypeVscode")}</SelectItem>
+                  <SelectItem value="cursor">{t("settings.ideTypeCursor")}</SelectItem>
+                  <SelectItem value="windsurf">{t("settings.ideTypeWindsurf")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <ToggleRow
           icon={<MonitorUp className="h-4 w-4 text-cyan-500" />}

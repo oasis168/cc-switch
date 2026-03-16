@@ -272,6 +272,15 @@ pub struct AppSettings {
     /// - Linux: "gnome-terminal" | "konsole" | "xfce4-terminal" | "alacritty" | "kitty" | "ghostty"
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preferred_terminal: Option<String>,
+
+    // ===== VSCode 插件设置 =====
+    /// IDE 类型："vscode"（默认）、"cursor"、"windsurf"
+    /// 决定自动探测哪个 IDE 的 settings.json 路径
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ide_type: Option<String>,
+    /// settings.json 自定义路径（留空则按 ide_type 自动探测）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vscode_settings_path: Option<String>,
 }
 
 fn default_show_in_tray() -> bool {
@@ -316,6 +325,8 @@ impl Default for AppSettings {
             backup_interval_hours: None,
             backup_retain_count: None,
             preferred_terminal: None,
+            ide_type: None,
+            vscode_settings_path: None,
         }
     }
 }

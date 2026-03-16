@@ -28,6 +28,7 @@ mod store;
 mod toolsearch_patch;
 mod tray;
 mod usage_script;
+mod vscode_settings;
 
 pub use app_config::{AppType, InstalledSkill, McpApps, McpServer, MultiAppConfig, SkillApps};
 pub use codex_config::{get_codex_auth_path, get_codex_config_path, write_codex_live_atomic};
@@ -751,6 +752,49 @@ pub fn run() {
                 // 检查 settings 表中的代理状态，自动恢复代理服务
                 restore_proxy_state_on_startup(&state).await;
 
+                // 检测 IDE settings.json 与当前供应商是否匹配，不匹配则向前端发送事件
+                {
+                    let proxy_running = state.proxy_service.is_running().await;
+                    let proxy_port = crate::proxy::http_client::get_cc_switch_proxy_port();
+                    let app_type = crate::app_config::AppType::Claude;
+                    let (current_token, current_base_url) = match crate::settings::get_effective_current_provider(state.db.as_ref(), &app_type) {
+                        Ok(Some(id)) => {
+                            match state.db.get_all_providers(app_type.as_str()) {
+                                Ok(all) => {
+                                    if let Some(provider) = all.get(&id) {
+                                        let env = provider.settings_config.get("env");
+                                        let token = env
+                                            .and_then(|e: &serde_json::Value| e.get("ANTHROPIC_AUTH_TOKEN"))
+                                            .and_then(|v: &serde_json::Value| v.as_str())
+                                            .unwrap_or("")
+                                            .to_string();
+                                        let base_url = env
+                                            .and_then(|e: &serde_json::Value| e.get("ANTHROPIC_BASE_URL"))
+                                            .and_then(|v: &serde_json::Value| v.as_str())
+                                            .unwrap_or("")
+                                            .to_string();
+                                        (token, base_url)
+                                    } else {
+                                        (String::new(), String::new())
+                                    }
+                                }
+                                Err(_) => (String::new(), String::new()),
+                            }
+                        }
+                        _ => (String::new(), String::new()),
+                    };
+                    let status = crate::vscode_settings::check_vscode_config_status(
+                        proxy_running,
+                        proxy_port,
+                        &current_token,
+                        &current_base_url,
+                    );
+                    log::info!("[VSCodeSettings] 启动状态检测: {:?}", status);
+                    if let Err(e) = app_handle.emit("vscode-config-status", &status) {
+                        log::warn!("[VSCodeSettings] 发送状态事件失败: {e}");
+                    }
+                }
+
                 // Periodic backup check (on startup)
                 if let Err(e) = state.db.periodic_backup_if_needed() {
                     log::warn!("Periodic backup failed on startup: {e}");
@@ -873,6 +917,9 @@ pub fn run() {
             commands::is_claude_plugin_applied,
             commands::apply_claude_onboarding_skip,
             commands::clear_claude_onboarding_skip,
+            commands::get_vscode_settings_path,
+            commands::sync_vscode_settings,
+            commands::check_vscode_config_status,
             // Tool Search patch
             commands::check_toolsearch_status,
             commands::apply_toolsearch_patch,

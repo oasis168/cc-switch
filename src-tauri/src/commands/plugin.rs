@@ -46,3 +46,102 @@ pub async fn apply_claude_onboarding_skip() -> Result<bool, String> {
 pub async fn clear_claude_onboarding_skip() -> Result<bool, String> {
     crate::claude_mcp::clear_has_completed_onboarding().map_err(|e| e.to_string())
 }
+
+/// VSCode 插件：获取探测到的 VSCode settings.json 路径
+#[tauri::command]
+pub async fn get_vscode_settings_path() -> Result<Option<String>, String> {
+    Ok(crate::vscode_settings::get_vscode_settings_path()
+        .map(|p| p.to_string_lossy().to_string()))
+}
+
+/// VSCode 插件：检测 settings.json 与当前供应商是否匹配
+#[tauri::command]
+pub async fn check_vscode_config_status(
+    state: tauri::State<'_, crate::store::AppState>,
+) -> Result<crate::vscode_settings::VscodeConfigStatus, String> {
+    use crate::app_config::AppType;
+
+    let app_settings = crate::settings::get_settings();
+    if !app_settings.enable_claude_plugin_integration {
+        return Ok(crate::vscode_settings::VscodeConfigStatus::IntegrationDisabled);
+    }
+
+    // 获取代理运行状态和端口
+    let proxy_running = state.proxy_service.is_running().await;
+    let proxy_port = crate::proxy::http_client::get_cc_switch_proxy_port();
+
+    // 获取当前供应商 token/base_url
+    let provider_id = crate::settings::get_effective_current_provider(state.db.as_ref(), &AppType::Claude)
+        .map_err(|e| e.to_string())?;
+
+    let (current_token, current_base_url) = if let Some(id) = provider_id {
+        let all = state.db.get_all_providers(AppType::Claude.as_str()).map_err(|e| e.to_string())?;
+        if let Some(provider) = all.get(&id) {
+            let env = provider.settings_config.get("env");
+            let token = env
+                .and_then(|e: &serde_json::Value| e.get("ANTHROPIC_AUTH_TOKEN"))
+                .and_then(|v: &serde_json::Value| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let base_url = env
+                .and_then(|e: &serde_json::Value| e.get("ANTHROPIC_BASE_URL"))
+                .and_then(|v: &serde_json::Value| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            (token, base_url)
+        } else {
+            (String::new(), String::new())
+        }
+    } else {
+        (String::new(), String::new())
+    };
+
+    Ok(crate::vscode_settings::check_vscode_config_status(
+        proxy_running,
+        proxy_port,
+        &current_token,
+        &current_base_url,
+    ))
+}
+
+/// VSCode 插件：手动将当前激活供应商同步到 VSCode settings.json
+#[tauri::command]
+pub async fn sync_vscode_settings(
+    state: tauri::State<'_, crate::store::AppState>,
+) -> Result<(), String> {
+    use crate::app_config::AppType;
+
+    let app_settings = crate::settings::get_settings();
+    if !app_settings.enable_claude_plugin_integration {
+        return Ok(());
+    }
+
+    let provider_id = crate::settings::get_effective_current_provider(state.db.as_ref(), &AppType::Claude)
+        .map_err(|e| e.to_string())?;
+
+    if let Some(id) = provider_id {
+        let all = state.db.get_all_providers(AppType::Claude.as_str()).map_err(|e| e.to_string())?;
+        if let Some(provider) = all.get(&id) {
+            let (token, base_url) = if app_settings.enable_local_proxy {
+                let port = crate::proxy::http_client::get_cc_switch_proxy_port();
+                ("proxy-placeholder".to_string(), format!("http://127.0.0.1:{port}"))
+            } else {
+                let env = provider.settings_config.get("env");
+                let token = env
+                    .and_then(|e: &serde_json::Value| e.get("ANTHROPIC_AUTH_TOKEN"))
+                    .and_then(|v: &serde_json::Value| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let base_url = env
+                    .and_then(|e: &serde_json::Value| e.get("ANTHROPIC_BASE_URL"))
+                    .and_then(|v: &serde_json::Value| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                (token, base_url)
+            };
+            crate::vscode_settings::update_claude_env_vars(&token, &base_url)
+                .map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}

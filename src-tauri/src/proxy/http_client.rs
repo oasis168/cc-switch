@@ -44,6 +44,11 @@ fn get_proxy_port() -> u16 {
         .unwrap_or(15721) // 默认端口作为回退
 }
 
+/// 获取 CC Switch 代理服务器的监听端口（公开版，供外部模块使用）
+pub fn get_cc_switch_proxy_port() -> u16 {
+    get_proxy_port()
+}
+
 /// 初始化全局 HTTP 客户端
 ///
 /// 应在应用启动时调用一次。

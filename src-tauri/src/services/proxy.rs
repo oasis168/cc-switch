@@ -128,6 +128,15 @@ impl ProxyService {
         // 5. 保存服务器实例
         *self.server.write().await = Some(server);
 
+        // 6. 同步 VSCode settings.json（代理模式）
+        let app_settings = crate::settings::get_settings();
+        if app_settings.enable_claude_plugin_integration {
+            let proxy_url = format!("http://{}:{}", info.address, info.port);
+            if let Err(e) = crate::vscode_settings::update_claude_env_vars("proxy-placeholder", &proxy_url) {
+                log::warn!("[VSCodeSettings] 代理启动时同步失败: {e}");
+            }
+        }
+
         log::info!("代理服务器已启动: {}:{}", info.address, info.port);
         Ok(info)
     }

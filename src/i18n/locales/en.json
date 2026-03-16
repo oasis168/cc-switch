@@ -463,6 +463,19 @@
     "minimizeToTrayDescription": "When checked, clicking the close button will hide to system tray, otherwise the app will exit directly.",
     "enableClaudePluginIntegration": "Apply to Claude Code extension",
     "enableClaudePluginIntegrationDescription": "When enabled, the VS Code Claude Code extension provider will switch with this app",
+    "vscodeSettingsPath": "IDE settings.json path",
+    "vscodeSettingsPathHint": "Leave empty to auto-detect based on IDE type",
+    "vscodeSettingsPathDetected": "Path detected",
+    "vscodeSettingsPathNotFound": "Settings file not found",
+    "syncVscodeSettings": "Sync to IDE now",
+    "syncVscodeSettingsSuccess": "Synced to IDE settings.json",
+    "syncVscodeSettingsFailed": "Failed to sync IDE settings",
+    "vscodeDirectModeHint": "When local proxy is off, the real API key will be written directly to IDE settings (direct mode)",
+    "ideType": "IDE Type",
+    "ideTypeDescription": "Select the editor to sync settings to (requires plugin integration enabled)",
+    "ideTypeVscode": "VSCode",
+    "ideTypeCursor": "Cursor",
+    "ideTypeWindsurf": "Windsurf",
     "skipClaudeOnboarding": "Skip Claude Code first-run confirmation",
     "skipClaudeOnboardingDescription": "When enabled, Claude Code will skip the first-run confirmation",
     "toolSearchBypass": "Bypass Tool Search domain restriction",
@@ -2199,5 +2212,9 @@
     },
     "suggestedDefaults": "Apply Suggested Defaults",
     "suggestedDefaultsHint": "Use this preset's recommended default model configuration"
+  },
+  "vscodeStatus": {
+    "proxyNotRunning": "IDE extension points to proxy but proxy is not running. Please enable local proxy first.",
+    "mismatch": "IDE extension config doesn't match current provider. Consider clicking \"Sync to IDE now\" to sync manually."
   }
 }

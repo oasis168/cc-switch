@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Settings, WebDavSyncSettings, RemoteSnapshotInfo } from "@/types";
+import type { Settings, WebDavSyncSettings, RemoteSnapshotInfo, VscodeConfigStatus } from "@/types";
 import type { AppId } from "./types";
 
 export interface ConfigTransferResult {
@@ -84,6 +84,18 @@ export const settingsApi = {
 
   async clearClaudeOnboardingSkip(): Promise<boolean> {
     return await invoke("clear_claude_onboarding_skip");
+  },
+
+  async getVscodeSettingsPath(): Promise<string | null> {
+    return await invoke("get_vscode_settings_path");
+  },
+
+  async syncVscodeSettings(): Promise<void> {
+    return await invoke("sync_vscode_settings");
+  },
+
+  async checkVscodeConfigStatus(): Promise<VscodeConfigStatus> {
+    return await invoke("check_vscode_config_status");
   },
 
   async applyToolSearchPatch(): Promise<
