@@ -18,6 +18,7 @@ import {
 } from "@/lib/query";
 import { extractErrorMessage } from "@/utils/errorUtils";
 import { openclawKeys } from "@/hooks/useOpenClaw";
+import { useProxyStatus } from "@/hooks/useProxyStatus";
 
 /**
  * Hook for managing provider actions (add, update, delete, switch)
@@ -31,6 +32,8 @@ export function useProviderActions(activeApp: AppId) {
   const updateProviderMutation = useUpdateProviderMutation(activeApp);
   const deleteProviderMutation = useDeleteProviderMutation(activeApp);
   const switchProviderMutation = useSwitchProviderMutation(activeApp);
+
+  const { takeoverStatus, switchProxyProvider } = useProxyStatus();
 
   // Claude 插件同步逻辑
   const syncClaudePlugin = useCallback(
@@ -139,6 +142,18 @@ export function useProviderActions(activeApp: AppId) {
   // 切换供应商
   const switchProvider = useCallback(
     async (provider: Provider) => {
+      // 代理接管模式下，走热切换路径（直接通知代理服务切换，不写磁盘）
+      const isTakeoverActive = takeoverStatus?.[activeApp] || false;
+      if (isTakeoverActive) {
+        try {
+          await switchProxyProvider({ appType: activeApp, providerId: provider.id });
+          await syncClaudePlugin(provider);
+        } catch {
+          // 错误提示由 switchProxyProvider mutation 处理
+        }
+        return;
+      }
+
       try {
         const result = await switchProviderMutation.mutateAsync(provider.id);
         await syncClaudePlugin(provider);

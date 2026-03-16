@@ -171,7 +171,7 @@ export function ProviderActions({
         disabled: true,
         variant: "secondary" as const,
         className:
-          "bg-gray-200 text-muted-foreground hover:bg-gray-200 hover:text-muted-foreground dark:bg-gray-700 dark:hover:bg-gray-700",
+          "bg-emerald-100 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400 dark:hover:bg-emerald-900/50 dark:hover:text-emerald-400",
         icon: <Check className="h-4 w-4" />,
         text: t("provider.inUse"),
       };
