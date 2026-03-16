@@ -1,6 +1,6 @@
 import { useTranslation } from "react-i18next";
 import type { SettingsFormState } from "@/hooks/useSettings";
-import { AppWindow, MonitorUp, Power, EyeOff, Search } from "lucide-react";
+import { AppWindow, MonitorUp, Power, EyeOff, Search, CheckCircle2, AlertCircle, FolderOpen } from "lucide-react";
 import { ToggleRow } from "@/components/ui/toggle-row";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -11,6 +11,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { useEffect, useState } from "react";
+import { settingsApi } from "@/lib/api";
 
 interface WindowSettingsProps {
   settings: SettingsFormState;
@@ -19,6 +22,30 @@ interface WindowSettingsProps {
 
 export function WindowSettings({ settings, onChange }: WindowSettingsProps) {
   const { t } = useTranslation();
+  const [detectedPath, setDetectedPath] = useState<string | null>(null);
+  const [pathChecked, setPathChecked] = useState(false);
+
+  // 开启插件联动 或 切换 ideType 时，重新探测路径（延迟 300ms 等后端保存完成）
+  useEffect(() => {
+    if (!settings.enableClaudePluginIntegration) {
+      setDetectedPath(null);
+      setPathChecked(false);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      settingsApi.getVscodeSettingsPath().then((p) => {
+        if (cancelled) return;
+        setDetectedPath(p);
+        setPathChecked(true);
+      }).catch(() => {
+        if (cancelled) return;
+        setDetectedPath(null);
+        setPathChecked(true);
+      });
+    }, 300);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [settings.enableClaudePluginIntegration, settings.ideType, settings.vscodeSettingsPath]);
 
   return (
     <section className="space-y-4">
@@ -74,24 +101,52 @@ export function WindowSettings({ settings, onChange }: WindowSettingsProps) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
               transition={{ duration: 0.3 }}
-              className="ml-6 flex flex-col gap-1"
+              className="ml-6 flex flex-col gap-2"
             >
-              <Label className="text-xs text-muted-foreground">
-                {t("settings.ideTypeDescription")}
-              </Label>
-              <Select
-                value={settings.ideType ?? "vscode"}
-                onValueChange={(value) => onChange({ ideType: value })}
-              >
-                <SelectTrigger className="w-48 h-8 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="vscode">{t("settings.ideTypeVscode")}</SelectItem>
-                  <SelectItem value="cursor">{t("settings.ideTypeCursor")}</SelectItem>
-                  <SelectItem value="windsurf">{t("settings.ideTypeWindsurf")}</SelectItem>
-                </SelectContent>
-              </Select>
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs text-muted-foreground">
+                  {t("settings.ideTypeDescription")}
+                </Label>
+                <Select
+                  value={settings.ideType ?? "vscode"}
+                  onValueChange={(value) => onChange({ ideType: value })}
+                >
+                  <SelectTrigger className="w-48 h-8 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="vscode">{t("settings.ideTypeVscode")}</SelectItem>
+                    <SelectItem value="cursor">{t("settings.ideTypeCursor")}</SelectItem>
+                    <SelectItem value="windsurf">{t("settings.ideTypeWindsurf")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* 路径状态 */}
+              {pathChecked && (
+                detectedPath ? (
+                  <div className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate" title={detectedPath}>{detectedPath}</span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+                      <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                      <span>{t("settings.vscodeSettingsPathNotFound")}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <FolderOpen className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      <Input
+                        className="h-7 text-xs"
+                        placeholder={t("settings.vscodeSettingsPathHint")}
+                        value={settings.vscodeSettingsPath ?? ""}
+                        onChange={(e) => onChange({ vscodeSettingsPath: e.target.value || undefined })}
+                      />
+                    </div>
+                  </div>
+                )
+              )}
             </motion.div>
           )}
         </AnimatePresence>

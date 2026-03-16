@@ -2215,6 +2215,7 @@
   },
   "vscodeStatus": {
     "proxyNotRunning": "IDE 插件指向代理，但代理未启动，请先开启本地代理",
-    "mismatch": "IDE 插件配置与当前供应商不匹配，建议点击\"立即同步到 IDE\"手动同步"
+    "mismatch": "IDE 插件配置与当前供应商不匹配，建议点击\"立即同步到 IDE\"手动同步",
+    "notFound": "未找到 IDE 配置文件{{path}}，请在设置中手动指定路径"
   }
 }

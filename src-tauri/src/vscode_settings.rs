@@ -80,17 +80,20 @@ pub fn get_default_path_for_ide(ide_type: &str) -> Option<PathBuf> {
 /// 获取有效的 IDE settings.json 路径
 /// 优先使用用户自定义路径（settings 中的 vscode_settings_path），
 /// 否则根据 ide_type 自动探测对应 IDE 的默认路径
+/// 只有文件实际存在才返回路径，不存在返回 None
 pub fn get_vscode_settings_path() -> Option<PathBuf> {
     let settings = crate::settings::get_settings();
     // 用户手动指定路径优先
     if let Some(custom) = &settings.vscode_settings_path {
         if !custom.trim().is_empty() {
-            return Some(PathBuf::from(custom));
+            let p = PathBuf::from(custom);
+            return if p.exists() { Some(p) } else { None };
         }
     }
-    // 根据 ide_type 自动探测
+    // 根据 ide_type 自动探测，只返回实际存在的路径
     let ide_type = settings.ide_type.as_deref().unwrap_or("vscode");
-    get_default_path_for_ide(ide_type)
+    let path = get_default_path_for_ide(ide_type)?;
+    if path.exists() { Some(path) } else { None }
 }
 
 /// 更新 VSCode settings.json 中的 claudeCode.environmentVariables
@@ -196,10 +199,16 @@ pub fn clear_claude_env_vars() -> Result<(), crate::error::AppError> {
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(tag = "status", rename_all = "camelCase")]
 pub enum VscodeConfigStatus {
-    /// 匹配正常
-    Ok,
+    /// 匹配正常，返回探测到的路径
+    Ok {
+        path: String
+    },
     /// settings.json 不存在或未配置
-    NotFound,
+    NotFound {
+        /// 尝试探测的路径（用于提示用户）
+        #[serde(rename = "detectedPath")]
+        detected_path: Option<String>
+    },
     /// 代理模式：settings.json 指向代理但代理未启动
     ProxyNotRunning {
         #[serde(rename = "baseUrl")]
@@ -231,27 +240,37 @@ pub fn check_vscode_config_status(
 
     let path = match get_vscode_settings_path() {
         Some(p) => p,
-        None => return VscodeConfigStatus::NotFound,
+        None => return VscodeConfigStatus::NotFound { detected_path: None },
     };
 
     if !path.exists() {
-        return VscodeConfigStatus::NotFound;
+        return VscodeConfigStatus::NotFound {
+            detected_path: Some(path.to_string_lossy().to_string()),
+        };
     }
 
     let content = match fs::read_to_string(&path) {
         Ok(c) => c,
-        Err(_) => return VscodeConfigStatus::NotFound,
+        Err(_) => return VscodeConfigStatus::NotFound {
+            detected_path: Some(path.to_string_lossy().to_string()),
+        },
     };
 
     let json: Value = match serde_json::from_str(&content) {
         Ok(v) => v,
-        Err(_) => return VscodeConfigStatus::NotFound,
+        Err(_) => return VscodeConfigStatus::NotFound {
+            detected_path: Some(path.to_string_lossy().to_string()),
+        },
     };
 
     let env_vars = match json.get("claudeCode.environmentVariables").and_then(|v| v.as_array()) {
         Some(v) => v.clone(),
-        None => return VscodeConfigStatus::NotFound,
+        None => return VscodeConfigStatus::NotFound {
+            detected_path: Some(path.to_string_lossy().to_string()),
+        },
     };
+
+    let path_str = path.to_string_lossy().to_string();
 
     let vscode_token = env_vars.iter()
         .find(|v| v.get("name").and_then(|n| n.as_str()) == Some("ANTHROPIC_AUTH_TOKEN"))
@@ -274,7 +293,7 @@ pub fn check_vscode_config_status(
                 base_url: vscode_base_url.to_string(),
             };
         }
-        return VscodeConfigStatus::Ok;
+        return VscodeConfigStatus::Ok { path: path_str };
     }
 
     // 直连模式：对比 base_url
@@ -285,5 +304,5 @@ pub fn check_vscode_config_status(
         };
     }
 
-    VscodeConfigStatus::Ok
+    VscodeConfigStatus::Ok { path: path_str }
 }

@@ -558,8 +558,8 @@ export interface OpenClawToolsConfig {
 
 // VSCode/Cursor/Windsurf 配置匹配状态
 export type VscodeConfigStatus =
-  | { status: "ok" }
-  | { status: "notFound" }
+  | { status: "ok"; path: string }
+  | { status: "notFound"; detectedPath?: string }
   | { status: "integrationDisabled" }
   | { status: "proxyNotRunning"; baseUrl: string }
   | { status: "mismatch"; currentBaseUrl: string; vscodeBaseUrl: string };

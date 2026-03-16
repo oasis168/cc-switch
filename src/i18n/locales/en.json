@@ -2215,6 +2215,7 @@
   },
   "vscodeStatus": {
     "proxyNotRunning": "IDE extension points to proxy but proxy is not running. Please enable local proxy first.",
-    "mismatch": "IDE extension config doesn't match current provider. Consider clicking \"Sync to IDE now\" to sync manually."
+    "mismatch": "IDE extension config doesn't match current provider. Consider clicking \"Sync to IDE now\" to sync manually.",
+    "notFound": "IDE config file not found{{path}}. Please specify the path manually in Settings."
   }
 }

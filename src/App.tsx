@@ -463,9 +463,21 @@ function App() {
     const setupListener = async () => {
       try {
         const { listen: listenEvent } = await import("@tauri-apps/api/event");
-        unsubscribe = await listenEvent<{ status: string; baseUrl?: string; currentBaseUrl?: string; vscodeBaseUrl?: string }>("vscode-config-status", (event) => {
+        unsubscribe = await listenEvent<{ status: string; path?: string; detectedPath?: string; baseUrl?: string; currentBaseUrl?: string; vscodeBaseUrl?: string }>("vscode-config-status", (event) => {
           const s = event.payload;
-          if (s.status === "proxyNotRunning") {
+          if (s.status === "ok") {
+            // 静默，路径已在设置页展示
+          } else if (s.status === "notFound") {
+            toast.warning(
+              t("vscodeStatus.notFound", {
+                path: s.detectedPath ?? "",
+                defaultValue: s.detectedPath
+                  ? `未找到 IDE 配置文件：${s.detectedPath}，请在设置中手动指定路径`
+                  : "未找到 IDE 配置文件，请在设置中手动指定路径",
+              }),
+              { closeButton: true, duration: 10000 }
+            );
+          } else if (s.status === "proxyNotRunning") {
             toast.warning(
               t("vscodeStatus.proxyNotRunning", { defaultValue: "IDE 插件指向代理，但代理未启动，请先开启本地代理" }),
               { closeButton: true, duration: 8000 }
