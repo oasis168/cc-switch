@@ -344,6 +344,31 @@ function App() {
 
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
+
+    const setupListener = async () => {
+      try {
+        unsubscribe = await listen("proxy-restore-failed", () => {
+          toast.warning(
+            t("notifications.proxyRestoreFailed", {
+              defaultValue:
+                "代理配置恢复失败，请手动切换一次供应商以激活代理转发",
+            }),
+            { duration: 8000 },
+          );
+        });
+      } catch (error) {
+        console.error("[App] Failed to subscribe proxy-restore-failed event", error);
+      }
+    };
+
+    setupListener();
+    return () => {
+      unsubscribe?.();
+    };
+  }, [t]);
+
+  useEffect(() => {
+    let unsubscribe: (() => void) | undefined;
     let active = true;
 
     const setupListener = async () => {

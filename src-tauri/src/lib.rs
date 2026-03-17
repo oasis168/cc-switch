@@ -750,7 +750,7 @@ pub fn run() {
                 initialize_common_config_snippets(&state);
 
                 // 检查 settings 表中的代理状态，自动恢复代理服务
-                restore_proxy_state_on_startup(&state).await;
+                restore_proxy_state_on_startup(&state, &app_handle).await;
 
                 // 检测 IDE settings.json 与当前供应商是否匹配，不匹配则向前端发送事件
                 {
@@ -1288,7 +1288,7 @@ pub async fn cleanup_before_exit(app_handle: &tauri::AppHandle) {
 ///
 /// 检查 `proxy_config.enabled` 字段，如果有任一应用的状态为 `true`，
 /// 则自动启动代理服务并接管对应应用的 Live 配置。
-async fn restore_proxy_state_on_startup(state: &store::AppState) {
+async fn restore_proxy_state_on_startup(state: &store::AppState, app_handle: &tauri::AppHandle) {
     // 收集需要恢复接管的应用列表（从 proxy_config.enabled 读取）
     let mut apps_to_restore = Vec::new();
     for app_type in ["claude", "codex", "gemini"] {
@@ -1325,6 +1325,10 @@ async fn restore_proxy_state_on_startup(state: &store::AppState) {
                     .await
                 {
                     log::error!("清除 {app_type} 代理状态失败: {clear_err}");
+                }
+                // 通知前端：代理恢复失败，需要用户手动切换供应商激活
+                if let Err(emit_err) = app_handle.emit("proxy-restore-failed", app_type) {
+                    log::error!("发送 proxy-restore-failed 事件失败: {emit_err}");
                 }
             }
         }
