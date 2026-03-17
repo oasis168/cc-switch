@@ -266,6 +266,14 @@ impl ProxyService {
                 let live_taken_over = self.detect_takeover_in_live_config_for_app(&app);
 
                 if has_backup || live_taken_over {
+                    // 补充内存路由目标（启动恢复时代理已跑但路由为空）
+                    if let Ok(Some(provider_id)) = crate::settings::get_effective_current_provider(&self.db, &app) {
+                        if let Ok(Some(provider)) = self.db.get_provider_by_id(&provider_id, app_type_str) {
+                            if let Some(server) = self.server.read().await.as_ref() {
+                                server.set_active_target(app_type_str, &provider.id, &provider.name).await;
+                            }
+                        }
+                    }
                     return Ok(());
                 }
 
