@@ -504,13 +504,18 @@ function App() {
             );
           } else if (s.status === "proxyNotRunning") {
             toast.warning(
-              t("vscodeStatus.proxyNotRunning", { defaultValue: "IDE 插件指向代理，但代理未启动，请先开启本地代理" }),
-              { closeButton: true, duration: 8000 }
+              t("vscodeStatus.proxyNotRunning", { defaultValue: "IDE 插件配置指向代理地址，但代理未启动，请开启代理或切换一次供应商以同步" }),
+              { closeButton: true, duration: 10000 }
+            );
+          } else if (s.status === "shouldUseProxy") {
+            toast.warning(
+              t("vscodeStatus.shouldUseProxy", { defaultValue: "代理已启动，但 IDE 插件配置未指向代理地址，请切换一次供应商以同步" }),
+              { closeButton: true, duration: 10000 }
             );
           } else if (s.status === "mismatch") {
             toast.warning(
               t("vscodeStatus.mismatch", {
-                defaultValue: "IDE 插件配置与当前供应商不匹配，建议手动同步",
+                defaultValue: "IDE 插件配置与当前供应商不匹配，请切换一次供应商以同步",
               }),
               { closeButton: true, duration: 8000 }
             );

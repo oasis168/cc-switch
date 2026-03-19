@@ -2215,8 +2215,9 @@
     "suggestedDefaultsHint": "使用此预设推荐的默认模型配置"
   },
   "vscodeStatus": {
-    "proxyNotRunning": "IDE 插件指向代理，但代理未启动，请先开启本地代理",
-    "mismatch": "IDE 插件配置与当前供应商不匹配，建议点击\"立即同步到 IDE\"手动同步",
+    "proxyNotRunning": "IDE 插件配置指向代理地址，但代理未启动，请开启代理或切换一次供应商以同步",
+    "shouldUseProxy": "代理已启动，但 IDE 插件配置未指向代理地址，请切换一次供应商以同步",
+    "mismatch": "IDE 插件配置与当前供应商不匹配，请切换一次供应商以同步",
     "notFound": "未找到 IDE 配置文件{{path}}，请在设置中手动指定路径"
   }
 }

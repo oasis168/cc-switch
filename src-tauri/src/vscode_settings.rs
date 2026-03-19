@@ -221,6 +221,11 @@ pub enum VscodeConfigStatus {
         #[serde(rename = "vscodeBaseUrl")]
         vscode_base_url: String
     },
+    /// 代理运行中但 settings.json 指向真实供应商地址，应同步为代理地址
+    ShouldUseProxy {
+        #[serde(rename = "vscodeBaseUrl")]
+        vscode_base_url: String
+    },
     /// 插件联动未启用
     IntegrationDisabled,
 }
@@ -296,8 +301,17 @@ pub fn check_vscode_config_status(
         return VscodeConfigStatus::Ok { path: path_str };
     }
 
-    // 直连模式：对比 base_url
-    if !current_base_url.is_empty() && vscode_base_url != current_base_url {
+    // 直连模式：代理运行中但 settings.json 指向真实供应商地址
+    if proxy_running {
+        return VscodeConfigStatus::ShouldUseProxy {
+            vscode_base_url: vscode_base_url.to_string(),
+        };
+    }
+
+    // 直连模式：对比 base_url 和 token
+    let base_url_mismatch = !current_base_url.is_empty() && vscode_base_url != current_base_url;
+    let token_mismatch = !current_token.is_empty() && vscode_token != current_token;
+    if base_url_mismatch || token_mismatch {
         return VscodeConfigStatus::Mismatch {
             current_base_url: current_base_url.to_string(),
             vscode_base_url: vscode_base_url.to_string(),

@@ -2215,8 +2215,9 @@
     "suggestedDefaultsHint": "Use this preset's recommended default model configuration"
   },
   "vscodeStatus": {
-    "proxyNotRunning": "IDE extension points to proxy but proxy is not running. Please enable local proxy first.",
-    "mismatch": "IDE extension config doesn't match current provider. Consider clicking \"Sync to IDE now\" to sync manually.",
+    "proxyNotRunning": "IDE extension config points to proxy but proxy is not running. Please enable proxy or switch provider once to sync.",
+    "shouldUseProxy": "Proxy is running but IDE extension config is not pointing to proxy. Please switch provider once to sync.",
+    "mismatch": "IDE extension config doesn't match current provider. Please switch provider once to sync.",
     "notFound": "IDE config file not found{{path}}. Please specify the path manually in Settings."
   }
 }
