@@ -122,7 +122,14 @@ pub async fn sync_vscode_settings(
     if let Some(id) = provider_id {
         let all = state.db.get_all_providers(AppType::Claude.as_str()).map_err(|e| e.to_string())?;
         if let Some(provider) = all.get(&id) {
-            let (token, base_url) = if app_settings.enable_local_proxy {
+            // 判断 claude 代理接管是否激活（proxy_config.enabled）
+            // 而非判断"在主页面显示本地代理开关"（enable_local_proxy）
+            let proxy_takeover_active = state.db
+                .get_proxy_config_for_app(AppType::Claude.as_str())
+                .await
+                .map(|c| c.enabled)
+                .unwrap_or(false);
+            let (token, base_url) = if proxy_takeover_active {
                 let port = crate::proxy::http_client::get_cc_switch_proxy_port();
                 ("proxy-placeholder".to_string(), format!("http://127.0.0.1:{port}"))
             } else {

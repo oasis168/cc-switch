@@ -122,6 +122,12 @@ export function useProxyStatus() {
 
       queryClient.invalidateQueries({ queryKey: ["proxyStatus"] });
       queryClient.invalidateQueries({ queryKey: ["proxyTakeoverStatus"] });
+      // 关闭接管时同步 VSCode settings.json，写入真实 token 替换代理地址
+      if (!variables.enabled && variables.appType === "claude") {
+        invoke("sync_vscode_settings").catch((e) =>
+          console.warn("[ProxyToggle] sync_vscode_settings failed:", e),
+        );
+      }
     },
     onError: (error: Error) => {
       const detail =
