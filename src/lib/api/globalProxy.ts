@@ -83,3 +83,45 @@ export async function getUpstreamProxyStatus(): Promise<UpstreamProxyStatus> {
 export async function scanLocalProxies(): Promise<DetectedProxy[]> {
   return invoke<DetectedProxy[]>("scan_local_proxies");
 }
+
+/**
+ * 实际生效的代理诊断信息
+ */
+export interface EffectiveProxyStatus {
+  /** 代理来源："explicit"（用户配置）/ "system"（系统自动检测）/ "direct"（直连） */
+  source: string;
+  /** 显式配置的代理 URL（脱敏） */
+  explicitProxy: string | null;
+  /** 连通性测试结果 */
+  reachable: boolean;
+  /** 延迟（毫秒） */
+  latencyMs: number;
+  /** 错误信息 */
+  error: string | null;
+}
+
+/**
+ * 同步代理结果
+ */
+export interface SyncProxyResult {
+  /** 执行的动作："proxy"（应用了代理）/ "direct"（切换为直连） */
+  action: string;
+  /** 应用的代理 URL（脱敏） */
+  proxyUrl: string | null;
+  /** 附加信息 */
+  message: string | null;
+}
+
+/**
+ * 获取当前实际生效的代理状态（含连通性测试）
+ */
+export async function getEffectiveProxyStatus(): Promise<EffectiveProxyStatus> {
+  return invoke<EffectiveProxyStatus>("get_effective_proxy_status");
+}
+
+/**
+ * 同步系统代理（智能检测：有代理就用，没有就直连）
+ */
+export async function syncSystemProxy(): Promise<SyncProxyResult> {
+  return invoke<SyncProxyResult>("sync_system_proxy");
+}

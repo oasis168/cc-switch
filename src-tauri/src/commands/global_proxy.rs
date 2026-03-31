@@ -245,3 +245,159 @@ pub async fn scan_local_proxies() -> Vec<DetectedProxy> {
     .await
     .unwrap_or_default()
 }
+
+/// 实际生效的代理诊断信息
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EffectiveProxyStatus {
+    /// 代理来源："explicit"（用户配置）/ "system"（系统自动检测）/ "direct"（直连）
+    pub source: String,
+    /// 显式配置的代理 URL（脱敏）
+    pub explicit_proxy: Option<String>,
+    /// 连通性测试结果
+    pub reachable: bool,
+    /// 延迟（毫秒）
+    pub latency_ms: u64,
+    /// 错误信息
+    pub error: Option<String>,
+}
+
+/// 获取当前实际生效的代理状态（含连通性测试）
+///
+/// 用于诊断代理问题：告诉用户当前出站请求走的是什么代理，能不能通。
+#[tauri::command]
+pub async fn get_effective_proxy_status() -> EffectiveProxyStatus {
+    let explicit_url = http_client::get_current_proxy_url();
+    let source = if explicit_url.is_some() {
+        "explicit"
+    } else {
+        "system"
+    };
+
+    // 用当前全局客户端测试连通性
+    let client = http_client::get();
+    let start = Instant::now();
+
+    let test_urls = [
+        "https://api.anthropic.com",
+        "https://httpbin.org/get",
+    ];
+
+    let mut last_error = None;
+    for test_url in test_urls {
+        match client
+            .head(test_url)
+            .timeout(Duration::from_secs(10))
+            .send()
+            .await
+        {
+            Ok(_) => {
+                let latency = start.elapsed().as_millis() as u64;
+                return EffectiveProxyStatus {
+                    source: source.to_string(),
+                    explicit_proxy: explicit_url.map(|u| http_client::mask_url(&u)),
+                    reachable: true,
+                    latency_ms: latency,
+                    error: None,
+                };
+            }
+            Err(e) => {
+                last_error = Some(e.to_string());
+            }
+        }
+    }
+
+    let latency = start.elapsed().as_millis() as u64;
+    EffectiveProxyStatus {
+        source: if explicit_url.is_some() {
+            "explicit".to_string()
+        } else {
+            "system".to_string()
+        },
+        explicit_proxy: explicit_url.map(|u| http_client::mask_url(&u)),
+        reachable: false,
+        latency_ms: latency,
+        error: last_error,
+    }
+}
+
+/// 同步系统代理（智能检测：有代理就用，没有就直连）
+///
+/// 1. 扫描本地常见代理端口
+/// 2. 如果找到可用代理，测试连通性后应用
+/// 3. 如果没找到，切换为直连模式
+#[tauri::command]
+pub async fn sync_system_proxy(
+    state: tauri::State<'_, AppState>,
+) -> Result<SyncProxyResult, String> {
+    // 1. 扫描本地代理
+    let proxies = scan_local_proxies().await;
+
+    if proxies.is_empty() {
+        // 没找到代理，切换为直连
+        http_client::apply_no_proxy().map_err(|e| e.to_string())?;
+        state
+            .db
+            .set_global_proxy_url(None)
+            .map_err(|e| e.to_string())?;
+
+        log::info!("[GlobalProxy] Sync: no local proxy found, switched to direct");
+        return Ok(SyncProxyResult {
+            action: "direct".to_string(),
+            proxy_url: None,
+            message: None,
+        });
+    }
+
+    // 2. 逐个测试找到的代理
+    for proxy in &proxies {
+        let result = test_proxy_url(proxy.url.clone()).await;
+        if let Ok(ref r) = result {
+            if r.success {
+                // 找到可用代理，应用它
+                http_client::validate_proxy(Some(&proxy.url))?;
+                state
+                    .db
+                    .set_global_proxy_url(Some(&proxy.url))
+                    .map_err(|e| e.to_string())?;
+                http_client::apply_proxy(Some(&proxy.url))?;
+
+                log::info!(
+                    "[GlobalProxy] Sync: applied proxy {}",
+                    http_client::mask_url(&proxy.url)
+                );
+                return Ok(SyncProxyResult {
+                    action: "proxy".to_string(),
+                    proxy_url: Some(http_client::mask_url(&proxy.url)),
+                    message: None,
+                });
+            }
+        }
+    }
+
+    // 3. 找到代理但都不通，切换为直连
+    http_client::apply_no_proxy().map_err(|e| e.to_string())?;
+    state
+        .db
+        .set_global_proxy_url(None)
+        .map_err(|e| e.to_string())?;
+
+    log::info!("[GlobalProxy] Sync: found proxies but none reachable, switched to direct");
+    Ok(SyncProxyResult {
+        action: "direct".to_string(),
+        proxy_url: None,
+        message: Some("Found local proxies but none reachable".to_string()),
+    })
+}
+
+/// 同步代理结果
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncProxyResult {
+    /// 执行的动作："proxy"（应用了代理）/ "direct"（切换为直连）
+    pub action: String,
+    /// 应用的代理 URL（脱敏）
+    pub proxy_url: Option<String>,
+    /// 附加信息
+    pub message: Option<String>,
+}

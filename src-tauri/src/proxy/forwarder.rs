@@ -17,7 +17,7 @@ use super::{
     ProxyError,
 };
 use crate::{app_config::AppType, provider::Provider};
-use reqwest::Response;
+use reqwest::{Client, Response};
 use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -828,83 +828,79 @@ impl RequestForwarder {
 
         // 获取 HTTP 客户端：优先使用供应商单独代理配置，否则使用全局客户端
         let proxy_config = provider.meta.as_ref().and_then(|m| m.proxy_config.as_ref());
-        let client = super::http_client::get_for_provider(proxy_config);
-        let mut request = client.post(&url);
+        let has_provider_proxy = proxy_config.map_or(false, |c| c.enabled);
 
-        // 只有当 timeout > 0 时才设置请求超时
-        // Duration::ZERO 在 reqwest 中表示"立刻超时"而不是"禁用超时"
-        // 故障转移关闭时会传入 0，此时应该使用 client 的默认超时（600秒）
-        if !self.non_streaming_timeout.is_zero() {
-            request = request.timeout(self.non_streaming_timeout);
-        }
+        // 提取请求构建逻辑为闭包，供重试时复用
+        let build_request = |client: &Client| -> reqwest::RequestBuilder {
+            let mut req = client.post(&url);
 
-        // 过滤黑名单 Headers，保护隐私并避免冲突
-        for (key, value) in headers {
-            if HEADER_BLACKLIST
-                .iter()
-                .any(|h| key.as_str().eq_ignore_ascii_case(h))
-            {
-                continue;
+            if !self.non_streaming_timeout.is_zero() {
+                req = req.timeout(self.non_streaming_timeout);
             }
-            request = request.header(key, value);
-        }
 
-        // 处理 anthropic-beta Header（仅 Claude）
-        // 关键：确保包含 claude-code-20250219 标记，这是上游服务验证请求来源的依据
-        // 如果客户端发送的 beta 标记中没有包含 claude-code-20250219，需要补充
-        if adapter.name() == "Claude" {
-            const CLAUDE_CODE_BETA: &str = "claude-code-20250219";
-            let beta_value = if let Some(beta) = headers.get("anthropic-beta") {
-                if let Ok(beta_str) = beta.to_str() {
-                    // 检查是否已包含 claude-code-20250219
-                    if beta_str.contains(CLAUDE_CODE_BETA) {
-                        beta_str.to_string()
+            // 过滤黑名单 Headers
+            for (key, value) in headers {
+                if HEADER_BLACKLIST
+                    .iter()
+                    .any(|h| key.as_str().eq_ignore_ascii_case(h))
+                {
+                    continue;
+                }
+                req = req.header(key, value);
+            }
+
+            // anthropic-beta Header（仅 Claude）
+            if adapter.name() == "Claude" {
+                const CLAUDE_CODE_BETA: &str = "claude-code-20250219";
+                let beta_value = if let Some(beta) = headers.get("anthropic-beta") {
+                    if let Ok(beta_str) = beta.to_str() {
+                        if beta_str.contains(CLAUDE_CODE_BETA) {
+                            beta_str.to_string()
+                        } else {
+                            format!("{CLAUDE_CODE_BETA},{beta_str}")
+                        }
                     } else {
-                        // 补充 claude-code-20250219
-                        format!("{CLAUDE_CODE_BETA},{beta_str}")
+                        CLAUDE_CODE_BETA.to_string()
                     }
                 } else {
                     CLAUDE_CODE_BETA.to_string()
+                };
+                req = req.header("anthropic-beta", &beta_value);
+            }
+
+            // 客户端 IP 透传
+            if let Some(xff) = headers.get("x-forwarded-for") {
+                if let Ok(xff_str) = xff.to_str() {
+                    req = req.header("x-forwarded-for", xff_str);
                 }
-            } else {
-                // 如果客户端没有发送，使用默认值
-                CLAUDE_CODE_BETA.to_string()
-            };
-            request = request.header("anthropic-beta", &beta_value);
-        }
-
-        // 客户端 IP 透传（默认开启）
-        if let Some(xff) = headers.get("x-forwarded-for") {
-            if let Ok(xff_str) = xff.to_str() {
-                request = request.header("x-forwarded-for", xff_str);
             }
-        }
-        if let Some(real_ip) = headers.get("x-real-ip") {
-            if let Ok(real_ip_str) = real_ip.to_str() {
-                request = request.header("x-real-ip", real_ip_str);
+            if let Some(real_ip) = headers.get("x-real-ip") {
+                if let Ok(real_ip_str) = real_ip.to_str() {
+                    req = req.header("x-real-ip", real_ip_str);
+                }
             }
-        }
 
-        // 流式请求保守禁用压缩，避免上游压缩 SSE 在连接中断时触发解压错误。
-        // 非流式请求不显式设置 Accept-Encoding，让 reqwest 自动协商压缩并透明解压。
-        if should_force_identity_encoding(effective_endpoint, &filtered_body, headers) {
-            request = request.header("accept-encoding", "identity");
-        }
+            // 流式请求禁用压缩
+            if should_force_identity_encoding(effective_endpoint, &filtered_body, headers) {
+                req = req.header("accept-encoding", "identity");
+            }
 
-        // 使用适配器添加认证头
-        if let Some(auth) = adapter.extract_auth(provider) {
-            request = adapter.add_auth_headers(request, &auth);
-        }
+            // 认证头
+            if let Some(auth) = adapter.extract_auth(provider) {
+                req = adapter.add_auth_headers(req, &auth);
+            }
 
-        // anthropic-version 统一处理（仅 Claude）：优先使用客户端的版本号，否则使用默认值
-        // 注意：只设置一次，避免重复
-        if adapter.name() == "Claude" {
-            let version_str = headers
-                .get("anthropic-version")
-                .and_then(|v| v.to_str().ok())
-                .unwrap_or("2023-06-01");
-            request = request.header("anthropic-version", version_str);
-        }
+            // anthropic-version（仅 Claude）
+            if adapter.name() == "Claude" {
+                let version_str = headers
+                    .get("anthropic-version")
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or("2023-06-01");
+                req = req.header("anthropic-version", version_str);
+            }
+
+            req
+        };
 
         // 输出请求信息日志
         let tag = adapter.name();
@@ -921,16 +917,94 @@ impl RequestForwarder {
             );
         }
 
-        // 发送请求
-        let response = request.json(&filtered_body).send().await.map_err(|e| {
-            if e.is_timeout() {
-                ProxyError::Timeout(format!("请求超时: {e}"))
-            } else if e.is_connect() {
-                ProxyError::ForwardFailed(format!("连接失败: {e}"))
-            } else {
-                ProxyError::ForwardFailed(e.to_string())
+        // 发送请求（带连接级两阶段重试）
+        let client = super::http_client::get_for_provider(proxy_config);
+        let request = build_request(&client);
+        let response = match request.json(&filtered_body).send().await {
+            Ok(resp) => resp,
+            Err(e) if e.is_connect() => {
+                // 阶段1：连接失败，可能是连接池中的死连接
+                // 新建客户端（新连接池）重试一次
+                log::warn!(
+                    "[{tag}] [{}] 连接失败，新建连接重试: {e}",
+                    log_fwd::CONNECT_RETRY_FRESH
+                );
+
+                let fresh_client = if has_provider_proxy {
+                    // 供应商有单独代理，重建供应商客户端
+                    super::http_client::build_client_for_provider(proxy_config)
+                        .unwrap_or_else(|| super::http_client::get())
+                } else {
+                    // 使用全局代理配置重建
+                    super::http_client::build_fresh_client()
+                        .unwrap_or_else(|_| super::http_client::get())
+                };
+
+                let retry_req = build_request(&fresh_client);
+                match retry_req.json(&filtered_body).send().await {
+                    Ok(resp) => resp,
+                    Err(e2) if e2.is_connect()
+                        && !has_provider_proxy
+                        && !super::http_client::has_explicit_proxy() =>
+                    {
+                        // 阶段2：新连接也失败，且没有显式代理配置
+                        // 说明系统代理本身不可达，尝试直连
+                        log::warn!(
+                            "[{tag}] [{}] 代理不可达，尝试直连: {e2}",
+                            log_fwd::CONNECT_RETRY_DIRECT
+                        );
+
+                        let direct_client = super::http_client::build_direct_client()
+                            .map_err(|be| {
+                                ProxyError::ForwardFailed(format!(
+                                    "连接失败: {e} (direct build: {be})"
+                                ))
+                            })?;
+
+                        let direct_req = build_request(&direct_client);
+                        match direct_req.json(&filtered_body).send().await {
+                            Ok(resp) => {
+                                log::info!(
+                                    "[{tag}] [{}] 直连成功，切换全局客户端为直连模式",
+                                    log_fwd::DIRECT_CONNECT_OK
+                                );
+                                let _ = super::http_client::apply_no_proxy();
+                                resp
+                            }
+                            Err(e3) => {
+                                return Err(if e3.is_timeout() {
+                                    ProxyError::Timeout(format!(
+                                        "请求超时 (proxy & direct): {e3}"
+                                    ))
+                                } else {
+                                    ProxyError::ForwardFailed(format!(
+                                        "连接失败 (proxy: {e}, direct: {e3})"
+                                    ))
+                                });
+                            }
+                        }
+                    }
+                    Err(e2) => {
+                        return Err(if e2.is_timeout() {
+                            ProxyError::Timeout(format!("请求超时: {e2}"))
+                        } else if e2.is_connect() {
+                            ProxyError::ForwardFailed(format!("连接失败: {e2}"))
+                        } else {
+                            ProxyError::ForwardFailed(e2.to_string())
+                        });
+                    }
+                }
             }
-        })?;
+            Err(e) => {
+                return Err(if e.is_timeout() {
+                    ProxyError::Timeout(format!("请求超时: {e}"))
+                } else if e.is_connect() {
+                    ProxyError::ForwardFailed(format!("连接失败: {e}"))
+                } else {
+                    ProxyError::ForwardFailed(e.to_string())
+                });
+            }
+        };
 
         // 检查响应状态
         let status = response.status();

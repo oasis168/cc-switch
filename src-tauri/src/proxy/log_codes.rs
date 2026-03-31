@@ -33,6 +33,12 @@ pub mod fwd {
     pub const PROVIDER_FAILED_RETRY: &str = "FWD-001";
     pub const ALL_PROVIDERS_FAILED: &str = "FWD-002";
     pub const SINGLE_PROVIDER_FAILED: &str = "FWD-003";
+    /// 连接失败，新建连接重试（绕过连接池死连接）
+    pub const CONNECT_RETRY_FRESH: &str = "FWD-010";
+    /// 代理不可达，尝试直连
+    pub const CONNECT_RETRY_DIRECT: &str = "FWD-011";
+    /// 直连成功，切换全局客户端为直连模式
+    pub const DIRECT_CONNECT_OK: &str = "FWD-012";
 }
 
 /// 故障转移日志码

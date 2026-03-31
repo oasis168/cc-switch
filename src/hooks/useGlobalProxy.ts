@@ -13,9 +13,13 @@ import {
   testProxyUrl,
   getUpstreamProxyStatus,
   scanLocalProxies,
+  getEffectiveProxyStatus,
+  syncSystemProxy,
   type ProxyTestResult,
   type UpstreamProxyStatus,
   type DetectedProxy,
+  type EffectiveProxyStatus,
+  type SyncProxyResult,
 } from "@/lib/api/globalProxy";
 
 /**
@@ -107,3 +111,47 @@ export function useScanProxies() {
 }
 
 export type { DetectedProxy };
+
+/**
+ * 获取当前实际生效的代理状态（含连通性测试）
+ */
+export function useEffectiveProxyStatus() {
+  return useQuery<EffectiveProxyStatus>({
+    queryKey: ["effectiveProxyStatus"],
+    queryFn: getEffectiveProxyStatus,
+    staleTime: 0, // 每次都重新获取
+  });
+}
+
+/**
+ * 同步系统代理（智能检测：有代理就用，没有就直连）
+ */
+export function useSyncSystemProxy() {
+  const queryClient = useQueryClient();
+  const { t } = useTranslation();
+
+  return useMutation({
+    mutationFn: syncSystemProxy,
+    onSuccess: (result: SyncProxyResult) => {
+      if (result.action === "proxy") {
+        toast.success(
+          t("settings.globalProxy.syncApplied", { proxy: result.proxyUrl }),
+        );
+      } else {
+        toast.success(t("settings.globalProxy.syncDirect"));
+      }
+      queryClient.invalidateQueries({ queryKey: ["globalProxyUrl"] });
+      queryClient.invalidateQueries({ queryKey: ["upstreamProxyStatus"] });
+      queryClient.invalidateQueries({ queryKey: ["effectiveProxyStatus"] });
+    },
+    onError: (error: unknown) => {
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : "Unknown error";
+      toast.error(t("settings.globalProxy.syncFailed", { error: message }));
+    },
+  });
+}

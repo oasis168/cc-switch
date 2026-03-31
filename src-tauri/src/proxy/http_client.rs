@@ -224,6 +224,7 @@ fn build_client(proxy_url: Option<&str>) -> Result<Client, String> {
         .timeout(Duration::from_secs(600))
         .connect_timeout(Duration::from_secs(30))
         .pool_max_idle_per_host(10)
+        .pool_idle_timeout(Duration::from_secs(90))
         .tcp_keepalive(Duration::from_secs(60));
 
     // 有代理地址则使用代理，否则跟随系统代理
@@ -391,6 +392,7 @@ pub fn build_client_for_provider(proxy_config: Option<&ProviderProxyConfig>) -> 
         .timeout(Duration::from_secs(600))
         .connect_timeout(Duration::from_secs(30))
         .pool_max_idle_per_host(10)
+        .pool_idle_timeout(Duration::from_secs(90))
         .tcp_keepalive(Duration::from_secs(60))
         .proxy(proxy)
         .build()
@@ -426,6 +428,67 @@ pub fn get_for_provider(proxy_config: Option<&ProviderProxyConfig>) -> Client {
 
     // 回退到全局客户端
     get()
+}
+
+/// 构建直连 HTTP 客户端（绕过系统代理）
+///
+/// 用于系统代理不可达时的回退。仅在未配置显式全局代理时使用。
+/// connect_timeout 较短（10秒），避免回退探测拖慢总响应时间。
+pub fn build_direct_client() -> Result<Client, String> {
+    Client::builder()
+        .timeout(Duration::from_secs(600))
+        .connect_timeout(Duration::from_secs(10))
+        .pool_max_idle_per_host(5)
+        .pool_idle_timeout(Duration::from_secs(90))
+        .tcp_keepalive(Duration::from_secs(60))
+        .no_proxy()
+        .build()
+        .map_err(|e| format!("Failed to build direct HTTP client: {e}"))
+}
+
+/// 构建新的 HTTP 客户端（使用当前代理配置，但不复用连接池）
+///
+/// 用于连接池中存在死连接时，强制建立新的 TCP 连接。
+pub fn build_fresh_client() -> Result<Client, String> {
+    let proxy_url = get_current_proxy_url();
+    build_client(proxy_url.as_deref())
+}
+
+/// 检查当前全局客户端是否使用了显式代理配置
+///
+/// 返回 true 表示用户手动配置了代理 URL，此时不应自动回退到直连。
+/// 返回 false 表示使用系统代理自动检测或直连。
+pub fn has_explicit_proxy() -> bool {
+    get_current_proxy_url().is_some()
+}
+
+/// 强制切换全局客户端为直连模式（绕过系统代理）
+///
+/// 当检测到系统代理不可达时调用。
+/// 与 apply_proxy(None) 不同，此函数显式禁用系统代理检测。
+pub fn apply_no_proxy() -> Result<(), String> {
+    let new_client = Client::builder()
+        .timeout(Duration::from_secs(600))
+        .connect_timeout(Duration::from_secs(30))
+        .pool_max_idle_per_host(10)
+        .pool_idle_timeout(Duration::from_secs(90))
+        .tcp_keepalive(Duration::from_secs(60))
+        .no_proxy()
+        .build()
+        .map_err(|e| format!("Failed to build no-proxy client: {e}"))?;
+
+    if let Some(lock) = GLOBAL_CLIENT.get() {
+        let mut client = lock.write().map_err(|e| {
+            log::error!("[GlobalProxy] [GP-010] Failed to acquire write lock: {e}");
+            "Failed to update proxy: lock poisoned".to_string()
+        })?;
+        *client = new_client;
+    }
+
+    // 不更新 CURRENT_PROXY_URL（保持 None），因为这是自动回退而非用户配置
+
+    log::info!("[GlobalProxy] Switched to direct connection (system proxy bypassed)");
+    Ok(())
 }
 
 #[cfg(test)]

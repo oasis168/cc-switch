@@ -8,12 +8,14 @@ import { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Loader2, TestTube2, Search, Eye, EyeOff, X } from "lucide-react";
+import { Loader2, TestTube2, Search, Eye, EyeOff, X, RefreshCw, Wifi, WifiOff } from "lucide-react";
 import {
   useGlobalProxyUrl,
   useSetGlobalProxyUrl,
   useTestProxy,
   useScanProxies,
+  useEffectiveProxyStatus,
+  useSyncSystemProxy,
   type DetectedProxy,
 } from "@/hooks/useGlobalProxy";
 
@@ -75,6 +77,8 @@ export function GlobalProxySettings() {
   const setMutation = useSetGlobalProxyUrl();
   const testMutation = useTestProxy();
   const scanMutation = useScanProxies();
+  const { data: effectiveStatus, isLoading: isCheckingStatus, refetch: recheckStatus } = useEffectiveProxyStatus();
+  const syncMutation = useSyncSystemProxy();
 
   const [url, setUrl] = useState("");
   const [username, setUsername] = useState("");
@@ -270,6 +274,66 @@ export function GlobalProxySettings() {
           ))}
         </div>
       )}
+
+      {/* 出站代理诊断状态 + 同步按钮 */}
+      <div className="flex items-center gap-3 rounded-md border px-3 py-2 text-sm">
+        <span className="text-muted-foreground">{t("settings.globalProxy.diagTitle")}:</span>
+        {isCheckingStatus ? (
+          <span className="flex items-center gap-1 text-muted-foreground">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            {t("settings.globalProxy.diagChecking")}
+          </span>
+        ) : effectiveStatus ? (
+          <>
+            <span className="font-mono text-xs">
+              {effectiveStatus.source === "explicit"
+                ? `${t("settings.globalProxy.diagSourceExplicit")} (${effectiveStatus.explicitProxy})`
+                : effectiveStatus.source === "system"
+                  ? t("settings.globalProxy.diagSourceSystem")
+                  : t("settings.globalProxy.diagSourceDirect")}
+            </span>
+            {effectiveStatus.reachable ? (
+              <span className="flex items-center gap-1 text-green-600">
+                <Wifi className="h-3 w-3" />
+                {t("settings.globalProxy.diagReachable")}
+                <span className="text-muted-foreground">
+                  ({t("settings.globalProxy.diagLatency", { latency: effectiveStatus.latencyMs })})
+                </span>
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-red-500">
+                <WifiOff className="h-3 w-3" />
+                {t("settings.globalProxy.diagUnreachable")}
+              </span>
+            )}
+          </>
+        ) : null}
+        <div className="ml-auto flex gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={isCheckingStatus}
+            onClick={() => recheckStatus()}
+            title={t("settings.globalProxy.diagTitle")}
+            className="h-7 px-2"
+          >
+            <RefreshCw className={`h-3 w-3 ${isCheckingStatus ? "animate-spin" : ""}`} />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={syncMutation.isPending}
+            onClick={() => syncMutation.mutate()}
+            title={t("settings.globalProxy.syncProxyHint")}
+            className="h-7"
+          >
+            {syncMutation.isPending && (
+              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+            )}
+            {t("settings.globalProxy.syncProxy")}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

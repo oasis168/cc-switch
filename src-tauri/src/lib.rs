@@ -1101,6 +1101,8 @@ pub fn run() {
             commands::test_proxy_url,
             commands::get_upstream_proxy_status,
             commands::scan_local_proxies,
+            commands::get_effective_proxy_status,
+            commands::sync_system_proxy,
             // Window theme control
             commands::set_window_theme,
             commands::read_omo_local_file,
