@@ -181,7 +181,7 @@ pub struct AppSettings {
     /// 是否跳过 Claude Code 初次安装确认
     #[serde(default)]
     pub skip_claude_onboarding: bool,
-    /// 是否解除 Tool Search 域名限制
+    /// Tool Search 域名限制绕过
     #[serde(default)]
     pub tool_search_bypass: bool,
     /// 是否开机自启
