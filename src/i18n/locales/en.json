@@ -2311,6 +2311,11 @@
     "apply": "Apply",
     "applied": "CLI proxy settings applied",
     "autoDetect": "Auto Detect",
-    "scan": "Scan Local Proxies"
+    "scan": "Scan Local Proxies",
+    "hintDisabled": "CLI proxy not managed. Use the clear button below to remove proxy variables",
+    "hintSync": "Auto-synced with outbound proxy settings",
+    "hintIndependent": "Enter proxy URL and click Apply",
+    "clear": "Clear",
+    "cleared": "CLI proxy environment variables cleared"
   }
 }

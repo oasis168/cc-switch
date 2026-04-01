@@ -4,7 +4,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Loader2, Search } from 'lucide-react'
+import { Loader2, Search, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   getCliProxyConfig,
@@ -53,6 +53,11 @@ export function CliProxySettings() {
     setConfig(newConfig)
     try {
       await setCliProxyConfig(newConfig)
+      if (mode === 'SyncOutbound') {
+        await applyCliProxy()
+        await loadCurrentEnv()
+        toast.success(t('cliProxy.applied'))
+      }
     } catch (error) {
       toast.error(String(error))
     }
@@ -87,6 +92,22 @@ export function CliProxySettings() {
     }
   }
 
+  const handleClear = async () => {
+    setLoading(true)
+    try {
+      const clearConfig = { ...config, mode: 'Disabled' as const }
+      setConfig(clearConfig)
+      await setCliProxyConfig(clearConfig)
+      await applyCliProxy()
+      await loadCurrentEnv()
+      toast.success(t('cliProxy.cleared'))
+    } catch (error) {
+      toast.error(String(error))
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div>
@@ -101,6 +122,11 @@ export function CliProxySettings() {
             <SelectItem value="Independent">{t('cliProxy.modeIndependent')}</SelectItem>
           </SelectContent>
         </Select>
+        <p className="text-xs text-muted-foreground mt-1">
+          {config.mode === 'Disabled' && t('cliProxy.hintDisabled')}
+          {config.mode === 'SyncOutbound' && t('cliProxy.hintSync')}
+          {config.mode === 'Independent' && t('cliProxy.hintIndependent')}
+        </p>
       </div>
 
       {config.mode === 'Independent' && (
@@ -123,8 +149,14 @@ export function CliProxySettings() {
         </div>
       )}
 
-      <div className="text-sm text-muted-foreground">
-        <div>{t('cliProxy.currentEnv')}: {currentEnv || t('cliProxy.notSet')}</div>
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <span>{t('cliProxy.currentEnv')}: {currentEnv || t('cliProxy.notSet')}</span>
+        {currentEnv && (
+          <Button onClick={handleClear} disabled={loading} size="sm" variant="ghost">
+            <Trash2 className="h-3 w-3 mr-1" />
+            {t('cliProxy.clear')}
+          </Button>
+        )}
       </div>
     </div>
   )

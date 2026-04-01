@@ -2311,6 +2311,11 @@
     "apply": "应用",
     "applied": "已应用 CLI 代理设置",
     "autoDetect": "自动检测",
-    "scan": "扫描本地代理"
+    "scan": "扫描本地代理",
+    "hintDisabled": "不管理 CLI 工具的代理，如需清除请点击下方清除按钮",
+    "hintSync": "自动跟随出站代理设置，环境变量已同步",
+    "hintIndependent": "请输入代理地址后点击「应用」",
+    "clear": "清除",
+    "cleared": "已清除 CLI 代理环境变量"
   }
 }
