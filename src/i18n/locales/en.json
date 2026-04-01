@@ -2316,6 +2316,7 @@
     "hintSync": "Auto-synced with outbound proxy settings",
     "hintIndependent": "Enter proxy URL and click Apply",
     "clear": "Clear",
-    "cleared": "CLI proxy environment variables cleared"
+    "cleared": "CLI proxy environment variables cleared",
+    "detecting": "Detecting..."
   }
 }

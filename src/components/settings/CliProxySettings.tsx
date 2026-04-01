@@ -22,6 +22,7 @@ export function CliProxySettings() {
     independent_url: '',
   })
   const [currentEnv, setCurrentEnv] = useState<string | null>(null)
+  const [detecting, setDetecting] = useState(true)
   const [loading, setLoading] = useState(false)
   const scanProxies = useScanProxies()
 
@@ -40,11 +41,14 @@ export function CliProxySettings() {
   }
 
   const loadCurrentEnv = async () => {
+    setDetecting(true)
     try {
       const env = await getCurrentCliProxyEnv()
       setCurrentEnv(env)
     } catch (error) {
       console.error('Failed to load current env:', error)
+    } finally {
+      setDetecting(false)
     }
   }
 
@@ -149,12 +153,24 @@ export function CliProxySettings() {
         </div>
       )}
 
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <span>{t('cliProxy.currentEnv')}: {currentEnv || t('cliProxy.notSet')}</span>
-        <Button onClick={handleClear} disabled={loading} size="sm" variant="ghost">
-          <Trash2 className="h-3 w-3 mr-1" />
-          {t('cliProxy.clear')}
-        </Button>
+      <div className="space-y-1">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">{t('cliProxy.currentEnv')}:</span>
+          <Button onClick={handleClear} disabled={loading} size="sm" variant="ghost">
+            <Trash2 className="h-3 w-3 mr-1" />
+            {t('cliProxy.clear')}
+          </Button>
+        </div>
+        <div className="text-xs text-muted-foreground pl-1">
+          {detecting ? (
+            <span className="flex items-center gap-1">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              {t('cliProxy.detecting')}
+            </span>
+          ) : (
+            currentEnv || t('cliProxy.notSet')
+          )}
+        </div>
       </div>
     </div>
   )

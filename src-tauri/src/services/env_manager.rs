@@ -397,15 +397,26 @@ pub fn clear_cli_proxy_env() -> Result<(), String> {
     Ok(())
 }
 
+/// 创建隐藏窗口的 Command（Windows 下不弹出命令行窗口）
+fn hidden_cmd(program: &str) -> std::process::Command {
+    let mut cmd = std::process::Command::new(program);
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    cmd
+}
+
 /// 设置 git/pip/npm 等工具的代理配置
 fn set_tool_proxy_configs(proxy_url: &str) -> Result<(), String> {
     let home = dirs::home_dir().ok_or("无法获取用户主目录")?;
 
     // git: ~/.gitconfig
-    let _ = std::process::Command::new("git")
+    let _ = hidden_cmd("git")
         .args(["config", "--global", "http.proxy", proxy_url])
         .output();
-    let _ = std::process::Command::new("git")
+    let _ = hidden_cmd("git")
         .args(["config", "--global", "https.proxy", proxy_url])
         .output();
 
@@ -425,10 +436,10 @@ fn set_tool_proxy_configs(proxy_url: &str) -> Result<(), String> {
     let _ = fs::write(&pip_conf, pip_content);
 
     // npm: npm config set proxy
-    let _ = std::process::Command::new("npm")
+    let _ = hidden_cmd("npm")
         .args(["config", "set", "proxy", proxy_url])
         .output();
-    let _ = std::process::Command::new("npm")
+    let _ = hidden_cmd("npm")
         .args(["config", "set", "https-proxy", proxy_url])
         .output();
 
@@ -440,10 +451,10 @@ fn clear_tool_proxy_configs() -> Result<(), String> {
     let home = dirs::home_dir().ok_or("无法获取用户主目录")?;
 
     // git
-    let _ = std::process::Command::new("git")
+    let _ = hidden_cmd("git")
         .args(["config", "--global", "--unset", "http.proxy"])
         .output();
-    let _ = std::process::Command::new("git")
+    let _ = hidden_cmd("git")
         .args(["config", "--global", "--unset", "https.proxy"])
         .output();
 
@@ -465,10 +476,10 @@ fn clear_tool_proxy_configs() -> Result<(), String> {
     }
 
     // npm
-    let _ = std::process::Command::new("npm")
+    let _ = hidden_cmd("npm")
         .args(["config", "delete", "proxy"])
         .output();
-    let _ = std::process::Command::new("npm")
+    let _ = hidden_cmd("npm")
         .args(["config", "delete", "https-proxy"])
         .output();
 
@@ -502,7 +513,7 @@ pub fn get_cli_proxy_env() -> Option<String> {
     }
 
     // git
-    if let Ok(output) = std::process::Command::new("git")
+    if let Ok(output) = hidden_cmd("git")
         .args(["config", "--global", "http.proxy"])
         .output()
     {
@@ -513,7 +524,7 @@ pub fn get_cli_proxy_env() -> Option<String> {
     }
 
     // npm
-    if let Ok(output) = std::process::Command::new("npm")
+    if let Ok(output) = hidden_cmd("npm")
         .args(["config", "get", "proxy"])
         .output()
     {

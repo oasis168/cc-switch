@@ -2316,6 +2316,7 @@
     "hintSync": "自动跟随出站代理设置，环境变量已同步",
     "hintIndependent": "请输入代理地址后点击「应用」",
     "clear": "清除",
-    "cleared": "已清除 CLI 代理环境变量"
+    "cleared": "已清除 CLI 代理环境变量",
+    "detecting": "检测中..."
   }
 }
