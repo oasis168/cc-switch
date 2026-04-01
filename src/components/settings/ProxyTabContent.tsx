@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Server, Activity, Zap, Globe, ShieldAlert } from "lucide-react";
+import { Server, Activity, Zap, Globe, ShieldAlert, Terminal } from "lucide-react";
 import { motion } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import {
@@ -15,6 +15,7 @@ import { AutoFailoverConfigPanel } from "@/components/proxy/AutoFailoverConfigPa
 import { FailoverQueueManager } from "@/components/proxy/FailoverQueueManager";
 import { RectifierConfigPanel } from "@/components/settings/RectifierConfigPanel";
 import { GlobalProxySettings } from "@/components/settings/GlobalProxySettings";
+import { CliProxySettings } from "@/components/settings/CliProxySettings";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ToggleRow } from "@/components/ui/toggle-row";
 import { useProxyStatus } from "@/hooks/useProxyStatus";
@@ -290,6 +291,26 @@ export function ProxyTabContent({
           </AccordionTrigger>
           <AccordionContent className="px-6 pb-6 pt-4 border-t border-border/50">
             <GlobalProxySettings />
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* CLI Tools Proxy */}
+        <AccordionItem value="cli-proxy" className="border rounded-lg">
+          <AccordionTrigger className="px-6 py-4 hover:no-underline">
+            <div className="flex items-center gap-3">
+              <Terminal className="h-5 w-5 text-green-500" />
+              <div className="text-left">
+                <h3 className="text-base font-semibold">
+                  {t("cliProxy.title")}
+                </h3>
+                <p className="text-sm text-muted-foreground font-normal">
+                  {t("cliProxy.description")}
+                </p>
+              </div>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="px-6 pb-6 pt-4 border-t border-border/50">
+            <CliProxySettings />
           </AccordionContent>
         </AccordionItem>
       </Accordion>

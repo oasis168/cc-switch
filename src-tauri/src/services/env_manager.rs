@@ -9,6 +9,43 @@ use winreg::enums::*;
 #[cfg(target_os = "windows")]
 use winreg::RegKey;
 
+#[cfg(target_os = "windows")]
+fn broadcast_env_change() {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+    use std::ptr;
+
+    #[link(name = "user32")]
+    extern "system" {
+        fn SendMessageTimeoutW(
+            hwnd: isize,
+            msg: u32,
+            wparam: usize,
+            lparam: isize,
+            flags: u32,
+            timeout: u32,
+            result: *mut usize,
+        ) -> isize;
+    }
+
+    const HWND_BROADCAST: isize = 0xFFFF;
+    const WM_SETTINGCHANGE: u32 = 0x001A;
+    const SMTO_ABORTIFHUNG: u32 = 0x0002;
+
+    let env: Vec<u16> = OsStr::new("Environment").encode_wide().chain(Some(0)).collect();
+    unsafe {
+        SendMessageTimeoutW(
+            HWND_BROADCAST,
+            WM_SETTINGCHANGE,
+            0,
+            env.as_ptr() as isize,
+            SMTO_ABORTIFHUNG,
+            5000,
+            ptr::null_mut(),
+        );
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupInfo {
@@ -225,6 +262,155 @@ fn restore_single_env(conflict: &EnvConflict) -> Result<(), String> {
             "无法恢复类型为 {} 的环境变量",
             conflict.source_type
         )),
+    }
+}
+
+// ===== CLI 工具代理环境变量管理 =====
+
+const CLI_PROXY_VARS: [&str; 6] = [
+    "HTTP_PROXY",
+    "http_proxy",
+    "HTTPS_PROXY",
+    "https_proxy",
+    "NO_PROXY",
+    "no_proxy",
+];
+
+/// 设置 CLI 工具代理环境变量
+pub fn set_cli_proxy_env(proxy_url: &str) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        let env = hkcu
+            .open_subkey_with_flags("Environment", KEY_ALL_ACCESS)
+            .map_err(|e| format!("打开注册表失败: {e}"))?;
+
+        for var in &CLI_PROXY_VARS[..4] {
+            env.set_value(var, &proxy_url)
+                .map_err(|e| format!("设置 {var} 失败: {e}"))?;
+        }
+
+        let no_proxy = "localhost,127.0.0.1";
+        env.set_value("NO_PROXY", &no_proxy)
+            .map_err(|e| format!("设置 NO_PROXY 失败: {e}"))?;
+        env.set_value("no_proxy", &no_proxy)
+            .map_err(|e| format!("设置 no_proxy 失败: {e}"))?;
+
+        broadcast_env_change();
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        use std::env;
+        let home = env::var("HOME").map_err(|_| "无法获取 HOME 环境变量")?;
+        let shell_files = [
+            format!("{home}/.bashrc"),
+            format!("{home}/.zshrc"),
+            format!("{home}/.profile"),
+        ];
+
+        for file_path in &shell_files {
+            if std::path::Path::new(file_path).exists() {
+                let mut content = fs::read_to_string(file_path)
+                    .map_err(|e| format!("读取 {file_path} 失败: {e}"))?;
+
+                for var in &CLI_PROXY_VARS[..4] {
+                    let pattern = format!("export {var}=");
+                    content = content
+                        .lines()
+                        .filter(|line| !line.trim_start().starts_with(&pattern))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    content.push_str(&format!("\nexport {var}={proxy_url}"));
+                }
+
+                let no_proxy = "localhost,127.0.0.1";
+                for var in &["NO_PROXY", "no_proxy"] {
+                    let pattern = format!("export {var}=");
+                    content = content
+                        .lines()
+                        .filter(|line| !line.trim_start().starts_with(&pattern))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    content.push_str(&format!("\nexport {var}={no_proxy}"));
+                }
+
+                fs::write(file_path, content)
+                    .map_err(|e| format!("写入 {file_path} 失败: {e}"))?;
+            }
+        }
+        Ok(())
+    }
+}
+
+/// 清除 CLI 工具代理环境变量
+pub fn clear_cli_proxy_env() -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        let env = hkcu
+            .open_subkey_with_flags("Environment", KEY_ALL_ACCESS)
+            .map_err(|e| format!("打开注册表失败: {e}"))?;
+
+        for var in &CLI_PROXY_VARS {
+            let _ = env.delete_value(var);
+        }
+
+        broadcast_env_change();
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        use std::env;
+        let home = env::var("HOME").map_err(|_| "无法获取 HOME 环境变量")?;
+        let shell_files = [
+            format!("{home}/.bashrc"),
+            format!("{home}/.zshrc"),
+            format!("{home}/.profile"),
+        ];
+
+        for file_path in &shell_files {
+            if std::path::Path::new(file_path).exists() {
+                let content = fs::read_to_string(file_path)
+                    .map_err(|e| format!("读取 {file_path} 失败: {e}"))?;
+
+                let filtered: String = content
+                    .lines()
+                    .filter(|line| {
+                        let trimmed = line.trim_start();
+                        !CLI_PROXY_VARS
+                            .iter()
+                            .any(|var| trimmed.starts_with(&format!("export {var}=")))
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
+
+                fs::write(file_path, filtered)
+                    .map_err(|e| format!("写入 {file_path} 失败: {e}"))?;
+            }
+        }
+        Ok(())
+    }
+}
+
+/// 获取当前 CLI 代理环境变量
+pub fn get_cli_proxy_env() -> Option<String> {
+    #[cfg(target_os = "windows")]
+    {
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        if let Ok(env) = hkcu.open_subkey("Environment") {
+            if let Ok(value) = env.get_value::<String, _>("HTTP_PROXY") {
+                return Some(value);
+            }
+        }
+        None
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        std::env::var("HTTP_PROXY").ok()
     }
 }
 

@@ -2277,5 +2277,20 @@
     },
     "suggestedDefaults": "推奨デフォルト設定を適用",
     "suggestedDefaultsHint": "このプリセットの推奨デフォルトモデル設定を使用します"
+  },
+  "cliProxy": {
+    "title": "CLI ツールプロキシ",
+    "description": "コマンドラインツール（git、pip、npm など）のプロキシ設定を管理",
+    "mode": "プロキシモード",
+    "modeDisabled": "無効",
+    "modeSyncOutbound": "アウトバウンドプロキシと同期",
+    "modeIndependent": "独立設定",
+    "independentUrl": "プロキシ URL",
+    "currentEnv": "現在の環境変数",
+    "notSet": "未設定",
+    "apply": "適用",
+    "applied": "CLI プロキシ設定を適用しました",
+    "autoDetect": "自動検出",
+    "scan": "ローカルプロキシをスキャン"
   }
 }

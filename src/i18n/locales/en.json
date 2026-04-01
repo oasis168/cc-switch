@@ -2297,5 +2297,21 @@
     "shouldUseProxy": "Proxy is running but IDE extension config is not pointing to proxy. Please switch provider once to sync.",
     "mismatch": "IDE extension config doesn't match current provider. Please switch provider once to sync.",
     "notFound": "IDE config file not found{{path}}. Please specify the path manually in Settings."
+  },
+  "cliProxy": {
+    "title": "CLI Tools Proxy",
+    "description": "Manage proxy settings for command-line tools (git, pip, npm, etc.)",
+    "mode": "Proxy Mode",
+    "modeDisabled": "Disabled",
+    "modeSyncOutbound": "Sync Outbound Proxy",
+    "modeIndependent": "Independent",
+    "independentUrl": "Proxy URL",
+    "currentEnv": "Current Environment Variable",
+    "notSet": "Not Set",
+    "apply": "Apply",
+    "applied": "CLI proxy settings applied",
+    "autoDetect": "Auto Detect",
+    "scan": "Scan Local Proxies"
   }
+}
 }

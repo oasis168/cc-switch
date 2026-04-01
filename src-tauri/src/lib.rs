@@ -1131,6 +1131,11 @@ pub fn run() {
             commands::scan_local_proxies,
             commands::get_effective_proxy_status,
             commands::sync_system_proxy,
+            // CLI proxy commands
+            commands::get_cli_proxy_config,
+            commands::set_cli_proxy_config,
+            commands::apply_cli_proxy,
+            commands::get_current_cli_proxy_env,
             // Window theme control
             commands::set_window_theme,
             // Generic managed auth commands

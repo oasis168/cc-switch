@@ -22,6 +22,39 @@ fn default_true() -> bool {
     true
 }
 
+/// CLI 代理模式
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum CliProxyMode {
+    Disabled,      // 关闭
+    SyncOutbound,  // 同步出站代理
+    Independent,   // 独立设置
+}
+
+impl Default for CliProxyMode {
+    fn default() -> Self {
+        Self::Disabled
+    }
+}
+
+/// CLI 工具代理配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CliProxyConfig {
+    #[serde(default)]
+    pub mode: CliProxyMode,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub independent_url: Option<String>,
+}
+
+impl Default for CliProxyConfig {
+    fn default() -> Self {
+        Self {
+            mode: CliProxyMode::Disabled,
+            independent_url: None,
+        }
+    }
+}
+
 /// 主页面显示的应用配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -281,6 +314,10 @@ pub struct AppSettings {
     /// settings.json 自定义路径（留空则按 ide_type 自动探测）
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub vscode_settings_path: Option<String>,
+
+    // ===== CLI 工具代理设置 =====
+    #[serde(default)]
+    pub cli_proxy: CliProxyConfig,
 }
 
 fn default_show_in_tray() -> bool {
@@ -327,6 +364,7 @@ impl Default for AppSettings {
             preferred_terminal: None,
             ide_type: None,
             vscode_settings_path: None,
+            cli_proxy: CliProxyConfig::default(),
         }
     }
 }

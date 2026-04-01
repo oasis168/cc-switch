@@ -2297,5 +2297,21 @@
     "shouldUseProxy": "代理已启动，但 IDE 插件配置未指向代理地址，请切换一次供应商以同步",
     "mismatch": "IDE 插件配置与当前供应商不匹配，请切换一次供应商以同步",
     "notFound": "未找到 IDE 配置文件{{path}}，请在设置中手动指定路径"
+  },
+  "cliProxy": {
+    "title": "CLI 工具代理",
+    "description": "管理命令行工具（git、pip、npm 等）的代理设置",
+    "mode": "代理模式",
+    "modeDisabled": "关闭",
+    "modeSyncOutbound": "同步出站代理",
+    "modeIndependent": "独立设置",
+    "independentUrl": "代理地址",
+    "currentEnv": "当前环境变量",
+    "notSet": "未设置",
+    "apply": "应用",
+    "applied": "已应用 CLI 代理设置",
+    "autoDetect": "自动检测",
+    "scan": "扫描本地代理"
   }
+}
 }

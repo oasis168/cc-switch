@@ -66,6 +66,12 @@ pub fn set_global_proxy_url(state: tauri::State<'_, AppState>, url: String) -> R
             .unwrap_or_else(|| "direct connection".to_string())
     );
 
+    // 如果 CLI 代理模式为 SyncOutbound，同步更新
+    let settings = crate::settings::get_settings();
+    if matches!(settings.cli_proxy.mode, crate::settings::CliProxyMode::SyncOutbound) {
+        let _ = super::cli_proxy::apply_cli_proxy(state);
+    }
+
     Ok(())
 }
 
@@ -342,6 +348,13 @@ pub async fn sync_system_proxy(
             .map_err(|e| e.to_string())?;
 
         log::info!("[GlobalProxy] Sync: no local proxy found, switched to direct");
+
+        // 如果 CLI 代理模式为 SyncOutbound，同步更新
+        let settings = crate::settings::get_settings();
+        if matches!(settings.cli_proxy.mode, crate::settings::CliProxyMode::SyncOutbound) {
+            let _ = super::cli_proxy::apply_cli_proxy(state.clone());
+        }
+
         return Ok(SyncProxyResult {
             action: "direct".to_string(),
             proxy_url: None,
@@ -366,6 +379,13 @@ pub async fn sync_system_proxy(
                     "[GlobalProxy] Sync: applied proxy {}",
                     http_client::mask_url(&proxy.url)
                 );
+
+                // 如果 CLI 代理模式为 SyncOutbound，同步更新
+                let settings = crate::settings::get_settings();
+                if matches!(settings.cli_proxy.mode, crate::settings::CliProxyMode::SyncOutbound) {
+                    let _ = super::cli_proxy::apply_cli_proxy(state.clone());
+                }
+
                 return Ok(SyncProxyResult {
                     action: "proxy".to_string(),
                     proxy_url: Some(http_client::mask_url(&proxy.url)),
@@ -383,6 +403,13 @@ pub async fn sync_system_proxy(
         .map_err(|e| e.to_string())?;
 
     log::info!("[GlobalProxy] Sync: found proxies but none reachable, switched to direct");
+
+    // 如果 CLI 代理模式为 SyncOutbound，同步更新
+    let settings = crate::settings::get_settings();
+    if matches!(settings.cli_proxy.mode, crate::settings::CliProxyMode::SyncOutbound) {
+        let _ = super::cli_proxy::apply_cli_proxy(state);
+    }
+
     Ok(SyncProxyResult {
         action: "direct".to_string(),
         proxy_url: None,
