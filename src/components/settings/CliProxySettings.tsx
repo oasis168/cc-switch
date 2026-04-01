@@ -151,12 +151,10 @@ export function CliProxySettings() {
 
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <span>{t('cliProxy.currentEnv')}: {currentEnv || t('cliProxy.notSet')}</span>
-        {currentEnv && (
-          <Button onClick={handleClear} disabled={loading} size="sm" variant="ghost">
-            <Trash2 className="h-3 w-3 mr-1" />
-            {t('cliProxy.clear')}
-          </Button>
-        )}
+        <Button onClick={handleClear} disabled={loading} size="sm" variant="ghost">
+          <Trash2 className="h-3 w-3 mr-1" />
+          {t('cliProxy.clear')}
+        </Button>
       </div>
     </div>
   )

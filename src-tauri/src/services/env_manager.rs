@@ -297,7 +297,6 @@ pub fn set_cli_proxy_env(proxy_url: &str) -> Result<(), String> {
             .map_err(|e| format!("设置 no_proxy 失败: {e}"))?;
 
         broadcast_env_change();
-        Ok(())
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -340,8 +339,10 @@ pub fn set_cli_proxy_env(proxy_url: &str) -> Result<(), String> {
                     .map_err(|e| format!("写入 {file_path} 失败: {e}"))?;
             }
         }
-        Ok(())
     }
+
+    set_tool_proxy_configs(proxy_url)?;
+    Ok(())
 }
 
 /// 清除 CLI 工具代理环境变量
@@ -358,7 +359,6 @@ pub fn clear_cli_proxy_env() -> Result<(), String> {
         }
 
         broadcast_env_change();
-        Ok(())
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -391,26 +391,165 @@ pub fn clear_cli_proxy_env() -> Result<(), String> {
                     .map_err(|e| format!("写入 {file_path} 失败: {e}"))?;
             }
         }
-        Ok(())
     }
+
+    clear_tool_proxy_configs()?;
+    Ok(())
 }
 
-/// 获取当前 CLI 代理环境变量
+/// 设置 git/pip/npm 等工具的代理配置
+fn set_tool_proxy_configs(proxy_url: &str) -> Result<(), String> {
+    let home = dirs::home_dir().ok_or("无法获取用户主目录")?;
+
+    // git: ~/.gitconfig
+    let _ = std::process::Command::new("git")
+        .args(["config", "--global", "http.proxy", proxy_url])
+        .output();
+    let _ = std::process::Command::new("git")
+        .args(["config", "--global", "https.proxy", proxy_url])
+        .output();
+
+    // pip: ~/pip/pip.ini (Windows) or ~/.config/pip/pip.conf (Unix)
+    #[cfg(target_os = "windows")]
+    let pip_dir = home.join("pip");
+    #[cfg(not(target_os = "windows"))]
+    let pip_dir = home.join(".config").join("pip");
+
+    let _ = fs::create_dir_all(&pip_dir);
+    #[cfg(target_os = "windows")]
+    let pip_conf = pip_dir.join("pip.ini");
+    #[cfg(not(target_os = "windows"))]
+    let pip_conf = pip_dir.join("pip.conf");
+
+    let pip_content = format!("[global]\nproxy = {proxy_url}\n");
+    let _ = fs::write(&pip_conf, pip_content);
+
+    // npm: npm config set proxy
+    let _ = std::process::Command::new("npm")
+        .args(["config", "set", "proxy", proxy_url])
+        .output();
+    let _ = std::process::Command::new("npm")
+        .args(["config", "set", "https-proxy", proxy_url])
+        .output();
+
+    Ok(())
+}
+
+/// 清除 git/pip/npm 等工具的代理配置
+fn clear_tool_proxy_configs() -> Result<(), String> {
+    let home = dirs::home_dir().ok_or("无法获取用户主目录")?;
+
+    // git
+    let _ = std::process::Command::new("git")
+        .args(["config", "--global", "--unset", "http.proxy"])
+        .output();
+    let _ = std::process::Command::new("git")
+        .args(["config", "--global", "--unset", "https.proxy"])
+        .output();
+
+    // pip
+    #[cfg(target_os = "windows")]
+    let pip_conf = home.join("pip").join("pip.ini");
+    #[cfg(not(target_os = "windows"))]
+    let pip_conf = home.join(".config").join("pip").join("pip.conf");
+
+    if pip_conf.exists() {
+        if let Ok(content) = fs::read_to_string(&pip_conf) {
+            let filtered: String = content
+                .lines()
+                .filter(|l| !l.trim_start().starts_with("proxy"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            let _ = fs::write(&pip_conf, filtered);
+        }
+    }
+
+    // npm
+    let _ = std::process::Command::new("npm")
+        .args(["config", "delete", "proxy"])
+        .output();
+    let _ = std::process::Command::new("npm")
+        .args(["config", "delete", "https-proxy"])
+        .output();
+
+    Ok(())
+}
+
+/// 获取当前 CLI 代理环境变量及工具配置状态
 pub fn get_cli_proxy_env() -> Option<String> {
+    let mut parts: Vec<String> = Vec::new();
+
+    // 环境变量
     #[cfg(target_os = "windows")]
     {
         let hkcu = RegKey::predef(HKEY_CURRENT_USER);
         if let Ok(env) = hkcu.open_subkey("Environment") {
             if let Ok(value) = env.get_value::<String, _>("HTTP_PROXY") {
-                return Some(value);
+                parts.push(format!("ENV: {value}"));
             }
         }
-        None
+        if parts.is_empty() {
+            if let Ok(v) = std::env::var("HTTP_PROXY").or_else(|_| std::env::var("http_proxy")) {
+                parts.push(format!("ENV: {v}"));
+            }
+        }
     }
-
     #[cfg(not(target_os = "windows"))]
     {
-        std::env::var("HTTP_PROXY").ok()
+        if let Ok(v) = std::env::var("HTTP_PROXY").or_else(|_| std::env::var("http_proxy")) {
+            parts.push(format!("ENV: {v}"));
+        }
+    }
+
+    // git
+    if let Ok(output) = std::process::Command::new("git")
+        .args(["config", "--global", "http.proxy"])
+        .output()
+    {
+        let val = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !val.is_empty() {
+            parts.push(format!("Git: {val}"));
+        }
+    }
+
+    // npm
+    if let Ok(output) = std::process::Command::new("npm")
+        .args(["config", "get", "proxy"])
+        .output()
+    {
+        let val = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !val.is_empty() && val != "null" && val != "undefined" {
+            parts.push(format!("npm: {val}"));
+        }
+    }
+
+    // pip
+    let home = dirs::home_dir();
+    if let Some(home) = home {
+        #[cfg(target_os = "windows")]
+        let pip_conf = home.join("pip").join("pip.ini");
+        #[cfg(not(target_os = "windows"))]
+        let pip_conf = home.join(".config").join("pip").join("pip.conf");
+
+        if let Ok(content) = fs::read_to_string(&pip_conf) {
+            for line in content.lines() {
+                let trimmed = line.trim();
+                if trimmed.starts_with("proxy") {
+                    if let Some(val) = trimmed.split('=').nth(1) {
+                        let val = val.trim();
+                        if !val.is_empty() {
+                            parts.push(format!("pip: {val}"));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join(" | "))
     }
 }
 
