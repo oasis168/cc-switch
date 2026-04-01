@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Loader2, Search } from 'lucide-react'
-import { useToast } from '@/hooks/use-toast'
+import { toast } from 'sonner'
 import {
   getCliProxyConfig,
   setCliProxyConfig,
@@ -17,7 +17,6 @@ import { useScanProxies } from '@/hooks/useGlobalProxy'
 
 export function CliProxySettings() {
   const { t } = useTranslation()
-  const { toast } = useToast()
   const [config, setConfig] = useState<CliProxyConfig>({
     mode: 'Disabled',
     independent_url: '',
@@ -55,7 +54,7 @@ export function CliProxySettings() {
     try {
       await setCliProxyConfig(newConfig)
     } catch (error) {
-      toast({ title: t('error'), description: String(error), variant: 'destructive' })
+      toast.error(String(error))
     }
   }
 
@@ -69,9 +68,9 @@ export function CliProxySettings() {
       await setCliProxyConfig(config)
       await applyCliProxy()
       await loadCurrentEnv()
-      toast({ title: t('success'), description: t('cliProxy.applied') })
+      toast.success(t('cliProxy.applied'))
     } catch (error) {
-      toast({ title: t('error'), description: String(error), variant: 'destructive' })
+      toast.error(String(error))
     } finally {
       setLoading(false)
     }
@@ -84,7 +83,7 @@ export function CliProxySettings() {
         setConfig({ ...config, independent_url: proxies[0].url })
       }
     } catch (error) {
-      toast({ title: t('error'), description: String(error), variant: 'destructive' })
+      toast.error(String(error))
     }
   }
 
