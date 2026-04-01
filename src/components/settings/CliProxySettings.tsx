@@ -3,8 +3,8 @@ import { useTranslation } from 'react-i18next'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Loader2, Search, RefreshCw } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Loader2, Search } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import {
   getCliProxyConfig,
@@ -92,20 +92,16 @@ export function CliProxySettings() {
     <div className="space-y-4">
       <div>
         <Label>{t('cliProxy.mode')}</Label>
-        <RadioGroup value={config.mode} onValueChange={handleModeChange} className="mt-2">
-          <div className="flex items-center space-x-2">
-            <RadioGroupItem value="Disabled" id="disabled" />
-            <Label htmlFor="disabled">{t('cliProxy.modeDisabled')}</Label>
-          </div>
-          <div className="flex items-center space-x-2">
-            <RadioGroupItem value="SyncOutbound" id="sync" />
-            <Label htmlFor="sync">{t('cliProxy.modeSyncOutbound')}</Label>
-          </div>
-          <div className="flex items-center space-x-2">
-            <RadioGroupItem value="Independent" id="independent" />
-            <Label htmlFor="independent">{t('cliProxy.modeIndependent')}</Label>
-          </div>
-        </RadioGroup>
+        <Select value={config.mode} onValueChange={handleModeChange}>
+          <SelectTrigger className="mt-2 w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Disabled">{t('cliProxy.modeDisabled')}</SelectItem>
+            <SelectItem value="SyncOutbound">{t('cliProxy.modeSyncOutbound')}</SelectItem>
+            <SelectItem value="Independent">{t('cliProxy.modeIndependent')}</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {config.mode === 'Independent' && (
