@@ -1093,6 +1093,23 @@ impl RequestForwarder {
             .and_then(|v| v.as_str())
             .unwrap_or("<none>");
         log::info!("[{tag}] >>> 请求 URL: {url} (model={request_model})");
+        // 调试：输出所有请求头
+        {
+            let mut header_lines = Vec::new();
+            for (k, v) in &ordered_headers {
+                let val = v.to_str().unwrap_or("<binary>");
+                // 隐藏认证值，只显示前8字符
+                let display_val = if k.as_str().eq_ignore_ascii_case("authorization")
+                    || k.as_str().eq_ignore_ascii_case("x-api-key")
+                {
+                    format!("{}...", &val[..val.len().min(15)])
+                } else {
+                    val.to_string()
+                };
+                header_lines.push(format!("  {}: {}", k, display_val));
+            }
+            log::info!("[{tag}] >>> 请求头:\n{}", header_lines.join("\n"));
+        }
         if let Ok(body_str) = serde_json::to_string(&filtered_body) {
             log::debug!(
                 "[{tag}] >>> 请求体内容 ({}字节): {}",
