@@ -239,13 +239,21 @@ impl ProxyService {
     /// - 开启：自动启动代理服务，仅接管当前 app 的 Live 配置
     /// - 关闭：仅恢复当前 app 的 Live 配置；若无其它接管，则自动停止代理服务
     pub async fn set_takeover_for_app(&self, app_type: &str, enabled: bool) -> Result<(), String> {
-        let app = AppType::from_str(app_type).map_err(|e| format!("无效的应用类型: {e}"))?;
+        log::info!("[Takeover] set_takeover_for_app called: app_type={app_type}, enabled={enabled}");
+        let app = AppType::from_str(app_type).map_err(|e| {
+            log::error!("[Takeover] 无效的应用类型: {e}");
+            format!("无效的应用类型: {e}")
+        })?;
         let app_type_str = app.as_str();
 
         if enabled {
             // 1) 代理服务未运行则自动启动
             if !self.is_running().await {
-                self.start().await?;
+                log::info!("[Takeover] 代理未运行，自动启动...");
+                if let Err(e) = self.start().await {
+                    log::error!("[Takeover] 代理启动失败: {e}");
+                    return Err(e);
+                }
             }
 
             // 2) 已接管则直接返回（幂等）；但如果缺少备份或占位符残留，需要重建接管
@@ -283,16 +291,21 @@ impl ProxyService {
             }
 
             // 3) 备份 Live 配置（严格：目标 app 不存在则报错）
-            self.backup_live_config_strict(&app).await?;
+            if let Err(e) = self.backup_live_config_strict(&app).await {
+                log::error!("[Takeover] 备份 Live 配置失败: {e}");
+                return Err(e);
+            }
 
             // 4) 同步 Live Token 到数据库（仅当前 app）
             if let Err(e) = self.sync_live_to_provider(&app).await {
+                log::error!("[Takeover] 同步 Live Token 失败: {e}");
                 let _ = self.db.delete_live_backup(app_type_str).await;
                 return Err(e);
             }
 
             // 5) 写入接管配置（仅当前 app）
             if let Err(e) = self.takeover_live_config_strict(&app).await {
+                log::error!("[Takeover] 写入接管配置失败: {e}");
                 log::error!("{app_type_str} 接管 Live 配置失败，尝试恢复: {e}");
                 match self.restore_live_config_for_app(&app).await {
                     Ok(()) => {
