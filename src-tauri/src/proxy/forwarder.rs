@@ -756,11 +756,25 @@ impl RequestForwarder {
             .unwrap_or(false);
 
         // 应用模型映射（独立于格式转换）
-        let (mapped_body, _original_model, _mapped_model) =
+        let (mapped_body, _original_model, mapped_model) =
             super::model_mapper::apply_model_mapping(body.clone(), provider);
+
+        // 检测映射后的模型是否为非 Claude 模型
+        // 非 Claude 模型不支持 thinking/interleaved-thinking 等 beta 特性
+        let effective_model: String = mapped_model
+            .as_deref()
+            .or_else(|| mapped_body.get("model").and_then(|m| m.as_str()))
+            .unwrap_or("")
+            .to_string();
+        let is_non_claude_model = !effective_model.is_empty()
+            && !effective_model.starts_with("claude-");
 
         // 与 CCH 对齐：请求前不做 thinking 主动改写（仅保留兼容入口）
         let mapped_body = normalize_thinking_type(mapped_body);
+
+        // 非 Claude 模型使用 Anthropic 兼容接口时，保留所有参数原样透传
+        // （包括 thinking、cache_control 等，第三方兼容接口可能支持这些特性）
+        let mapped_body = mapped_body;
 
         // 确定有效端点
         // GitHub Copilot API 使用 /chat/completions（无 /v1 前缀）
@@ -904,7 +918,7 @@ impl RequestForwarder {
             .ok()
             .and_then(|u| u.authority().map(|a| a.to_string()));
 
-        // 预计算 anthropic-beta 值（仅 Claude）
+        // 预计算 anthropic-beta 值（仅 Claude adapter）
         let anthropic_beta_value = if adapter.name() == "Claude" {
             const CLAUDE_CODE_BETA: &str = "claude-code-20250219";
             Some(if let Some(beta) = headers.get("anthropic-beta") {
@@ -1092,6 +1106,7 @@ impl RequestForwarder {
             .get("model")
             .and_then(|v| v.as_str())
             .unwrap_or("<none>");
+
         log::info!("[{tag}] >>> 请求 URL: {url} (model={request_model})");
         // 调试：输出所有请求头
         {
@@ -1111,11 +1126,20 @@ impl RequestForwarder {
             log::info!("[{tag}] >>> 请求头:\n{}", header_lines.join("\n"));
         }
         if let Ok(body_str) = serde_json::to_string(&filtered_body) {
-            log::debug!(
-                "[{tag}] >>> 请求体内容 ({}字节): {}",
-                body_str.len(),
-                body_str
-            );
+            if is_non_claude_model {
+                // 非 Claude 模型：用 INFO 级别输出请求体，方便排查
+                log::info!(
+                    "[{tag}] >>> 请求体内容 ({}字节): {}",
+                    body_str.len(),
+                    body_str
+                );
+            } else {
+                log::debug!(
+                    "[{tag}] >>> 请求体内容 ({}字节): {}",
+                    body_str.len(),
+                    body_str
+                );
+            }
         }
 
         // 确定超时
@@ -1161,6 +1185,10 @@ impl RequestForwarder {
         };
 
         // 发送请求（带连接级两阶段重试）
+        // 非 Claude 模型：跳过 raw write 路径，直接使用 hyper-util 客户端
+        // 原因：raw write 路径对某些上游服务器（如 bigmodel.cn）可能不兼容
+        let force_hyper_util = is_non_claude_model;
+
         let response = if is_socks_proxy {
             // SOCKS5 代理：走 reqwest
             log::debug!("[Forwarder] Using reqwest for SOCKS5 proxy");
@@ -1221,8 +1249,23 @@ impl RequestForwarder {
                     ProxyError::ForwardFailed(e.to_string())
                 }),
             }
+        } else if force_hyper_util {
+            // 非 Claude 模型：跳过 raw write，直接用 reqwest 发送
+            // raw write 路径对某些上游服务器（如 bigmodel.cn Tengine）可能不兼容
+            log::info!("[{tag}] 非 Claude 模型，使用 reqwest 客户端发送请求");
+            let client = super::http_client::build_fresh_client()
+                .unwrap_or_else(|_| super::http_client::get());
+            match send_via_reqwest(client, ordered_headers, body_bytes, timeout).await {
+                Ok(resp) => ProxyResponse::Reqwest(resp),
+                Err(e) => return Err(if e.is_timeout() {
+                    ProxyError::Timeout(format!("请求超时: {e}"))
+                } else if e.is_connect() {
+                    ProxyError::ForwardFailed(format!("连接失败: {e}"))
+                } else {
+                    ProxyError::ForwardFailed(e.to_string())
+                }),
+            }
         } else {
-            // HTTP 代理或直连：走 hyper raw write（保持 header 大小写）
             match super::hyper_client::send_request(
                 uri.clone(),
                 http::Method::POST,
@@ -1295,10 +1338,19 @@ impl RequestForwarder {
         let status = response.status();
 
         if status.is_success() {
+            log::info!("[{tag}] <<< 响应成功: {}", status.as_u16());
             Ok((response, resolved_claude_api_format))
         } else {
             let status_code = status.as_u16();
-            let body_text = String::from_utf8(response.bytes().await?.to_vec()).ok();
+            let body_bytes = response.bytes().await?;
+            let body_text = String::from_utf8(body_bytes.to_vec()).ok();
+
+            // 详细记录上游错误
+            log::error!(
+                "[{tag}] <<< 上游错误响应: status={}, body={}",
+                status_code,
+                body_text.as_deref().unwrap_or("<无法解析>")
+            );
 
             Err(ProxyError::UpstreamError {
                 status: status_code,
