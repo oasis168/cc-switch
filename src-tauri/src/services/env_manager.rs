@@ -399,13 +399,20 @@ pub fn clear_cli_proxy_env() -> Result<(), String> {
 
 /// 创建隐藏窗口的 Command（Windows 下不弹出命令行窗口）
 fn hidden_cmd(program: &str) -> std::process::Command {
-    let mut cmd = std::process::Command::new(program);
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::process::CommandExt;
+        // Windows 上 npm/npx 等是 .cmd 文件，CreateProcessW 无法直接执行
+        // 需要通过 cmd /C 来运行
+        let mut cmd = std::process::Command::new("cmd");
+        cmd.args(["/C", program]);
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        cmd
     }
-    cmd
+    #[cfg(not(target_os = "windows"))]
+    {
+        std::process::Command::new(program)
+    }
 }
 
 /// 设置 git/pip/npm 等工具的代理配置
