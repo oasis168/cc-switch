@@ -1,6 +1,9 @@
 #![allow(non_snake_case)]
 
 mod auth;
+mod balance;
+mod codex_oauth;
+mod coding_plan;
 mod config;
 mod copilot;
 mod deeplink;
@@ -11,6 +14,7 @@ mod cli_proxy;
 mod import_export;
 mod mcp;
 mod misc;
+mod model_fetch;
 mod omo;
 mod openclaw;
 mod plugin;
@@ -21,6 +25,7 @@ mod session_manager;
 mod settings;
 pub mod skill;
 mod stream_check;
+mod subscription;
 mod sync_support;
 mod toolsearch;
 
@@ -30,6 +35,9 @@ mod webdav_sync;
 mod workspace;
 
 pub use auth::*;
+pub use balance::*;
+pub use codex_oauth::*;
+pub use coding_plan::*;
 pub use config::*;
 pub use copilot::*;
 pub use deeplink::*;
@@ -40,6 +48,7 @@ pub use cli_proxy::*;
 pub use import_export::*;
 pub use mcp::*;
 pub use misc::*;
+pub use model_fetch::*;
 pub use omo::*;
 pub use openclaw::*;
 pub use plugin::*;
@@ -50,6 +59,7 @@ pub use session_manager::*;
 pub use settings::*;
 pub use skill::*;
 pub use stream_check::*;
+pub use subscription::*;
 pub use toolsearch::*;
 
 pub use lightweight::*;

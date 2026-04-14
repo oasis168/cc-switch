@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { useEffect, useState } from "react";
 import { settingsApi } from "@/lib/api";
+import { isLinux } from "@/lib/platform";
 
 interface WindowSettingsProps {
   settings: SettingsFormState;
@@ -174,6 +175,18 @@ export function WindowSettings({ settings, onChange }: WindowSettingsProps) {
             onChange({ minimizeToTrayOnClose: value })
           }
         />
+
+        {isLinux() && (
+          <ToggleRow
+            icon={<AppWindow className="h-4 w-4 text-amber-500" />}
+            title={t("settings.useAppWindowControls")}
+            description={t("settings.useAppWindowControlsDescription")}
+            checked={!!settings.useAppWindowControls}
+            onCheckedChange={(value) =>
+              onChange({ useAppWindowControls: value })
+            }
+          />
+        )}
       </div>
     </section>
   );

@@ -1,0 +1,59 @@
+{
+  "basic": {
+    "name": "cc-switch",
+    "description": "Claude Code/Codex/Gemini CLI等AI工具的全方位管理器，Tauri 2桌面应用，支持会话管理/API切换/代理/用量统计",
+    "version": "",
+    "status": "active",
+    "techStack": [
+      "TypeScript",
+      "Rust",
+      "React",
+      "Tauri 2"
+    ],
+    "createdAt": "",
+    "updatedAt": ""
+  },
+  "category": {
+    "type": "ai",
+    "tags": [
+      "tauri",
+      "react",
+      "claude"
+    ]
+  },
+  "run": {
+    "script": {
+      "windows": "脚本/start.bat",
+      "linux": "脚本/start.sh"
+    },
+    "command": "pnpm tauri dev",
+    "port": [],
+    "envRequired": "Node.js 18+, pnpm, Rust"
+  },
+  "install": {
+    "script": {
+      "windows": "脚本/install.bat",
+      "linux": "脚本/install.sh"
+    },
+    "command": "pnpm install",
+    "dependencies": [
+      "Node.js 18+",
+      "pnpm",
+      "Rust",
+      "Tauri CLI"
+    ]
+  },
+  "docs": {
+    "features": "会话管理，API配置切换，代理管理，用量统计，i18n多语言",
+    "notes": "Tauri 2桌面应用，跨平台Windows/macOS/Linux\n构建: pnpm tauri build",
+    "faq": []
+  },
+  "relations": {
+    "linkedProjects": [],
+    "sharedComponents": []
+  },
+  "history": {
+    "lastStartedAt": "",
+    "totalStarts": 0
+  }
+}
