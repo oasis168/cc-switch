@@ -759,8 +759,11 @@ impl RequestForwarder {
         let (mapped_body, _original_model, mapped_model) =
             super::model_mapper::apply_model_mapping(body.clone(), provider);
 
+        // 判断供应商是否配置了模型映射（自定义模型）
+        let mapping = super::model_mapper::ModelMapping::from_provider(provider);
+        let has_custom_model_mapping = mapping.has_mapping();
+
         // 检测映射后的模型是否为非 Claude 模型
-        // 非 Claude 模型不支持 thinking/interleaved-thinking 等 beta 特性
         let effective_model: String = mapped_model
             .as_deref()
             .or_else(|| mapped_body.get("model").and_then(|m| m.as_str()))
@@ -774,7 +777,23 @@ impl RequestForwarder {
 
         // 非 Claude 模型使用 Anthropic 兼容接口时，保留所有参数原样透传
         // （包括 thinking、cache_control 等，第三方兼容接口可能支持这些特性）
-        let mapped_body = mapped_body;
+        //
+        // 对于没有模型映射但请求中模型名不是 Claude 的情况（热切换残留），
+        // 需要恢复为 Claude 默认模型
+        let mapped_body = if !has_custom_model_mapping && is_non_claude_model {
+            let mut body = mapped_body;
+            // 热切换残留：请求中的模型名（如 glm-5）不属于当前供应商
+            // 恢复为 Claude 默认模型 claude-sonnet-4-20250514
+            let default_claude_model = "claude-sonnet-4-20250514";
+            log::info!(
+                "[{}] 供应商无模型映射，但请求模型 ({effective_model}) 非 Claude 模型，恢复为 {default_claude_model}",
+                adapter.name()
+            );
+            body["model"] = serde_json::json!(default_claude_model);
+            body
+        } else {
+            mapped_body
+        };
 
         // 确定有效端点
         // GitHub Copilot API 使用 /chat/completions（无 /v1 前缀）
@@ -1185,9 +1204,9 @@ impl RequestForwarder {
         };
 
         // 发送请求（带连接级两阶段重试）
-        // 非 Claude 模型：跳过 raw write 路径，直接使用 hyper-util 客户端
-        // 原因：raw write 路径对某些上游服务器（如 bigmodel.cn）可能不兼容
-        let force_hyper_util = is_non_claude_model;
+        // 仅对配置了自定义模型映射的供应商（如 GLM、DeepSeek）使用 reqwest
+        // 没有模型映射的供应商（直接支持 Claude 模型）仍走 raw write
+        let force_hyper_util = has_custom_model_mapping && is_non_claude_model;
 
         let response = if is_socks_proxy {
             // SOCKS5 代理：走 reqwest
