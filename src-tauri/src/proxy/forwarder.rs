@@ -1145,20 +1145,11 @@ impl RequestForwarder {
             log::info!("[{tag}] >>> 请求头:\n{}", header_lines.join("\n"));
         }
         if let Ok(body_str) = serde_json::to_string(&filtered_body) {
-            if is_non_claude_model {
-                // 非 Claude 模型：用 INFO 级别输出请求体，方便排查
-                log::info!(
-                    "[{tag}] >>> 请求体内容 ({}字节): {}",
-                    body_str.len(),
-                    body_str
-                );
-            } else {
-                log::debug!(
-                    "[{tag}] >>> 请求体内容 ({}字节): {}",
-                    body_str.len(),
-                    body_str
-                );
-            }
+            log::debug!(
+                "[{tag}] >>> 请求体内容 ({}字节): {}",
+                body_str.len(),
+                body_str
+            );
         }
 
         // 确定超时
