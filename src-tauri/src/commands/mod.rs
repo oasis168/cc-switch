@@ -26,7 +26,7 @@ mod settings;
 pub mod skill;
 mod stream_check;
 mod subscription;
-mod sync_support;
+pub mod sync_support;
 mod toolsearch;
 
 mod lightweight;

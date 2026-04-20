@@ -201,6 +201,7 @@ export interface VisibleApps {
 // WebDAV 同步状态
 export interface WebDavSyncStatus {
   lastSyncAt?: number | null;
+  lastDownloadAt?: number | null;
   lastError?: string | null;
   lastErrorSource?: string | null;
   lastRemoteEtag?: string | null;

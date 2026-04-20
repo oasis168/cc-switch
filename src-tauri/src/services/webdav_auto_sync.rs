@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
@@ -17,6 +17,19 @@ pub(crate) const MAX_AUTO_SYNC_WAIT_MS: u64 = 10_000;
 
 static DB_CHANGE_TX: OnceLock<Sender<String>> = OnceLock::new();
 static AUTO_SYNC_SUPPRESS_DEPTH: AtomicUsize = AtomicUsize::new(0);
+static STARTUP_SYNC_READY: AtomicBool = AtomicBool::new(false);
+
+/// Mark auto-sync as ready for uploading. Called after a successful startup download
+/// (or when WebDAV/auto-sync is not applicable).
+pub fn mark_startup_sync_ready() {
+    STARTUP_SYNC_READY.store(true, Ordering::SeqCst);
+}
+
+/// Whether the auto-sync worker is allowed to upload.
+/// Returns `false` until the startup cloud download has completed (or was skipped).
+pub fn is_startup_sync_ready() -> bool {
+    STARTUP_SYNC_READY.load(Ordering::SeqCst)
+}
 
 pub(crate) struct AutoSyncSuppressionGuard;
 
@@ -107,6 +120,10 @@ async fn run_auto_sync_upload(
     db: &crate::database::Database,
     app: &AppHandle,
 ) -> Result<(), AppError> {
+    if !is_startup_sync_ready() {
+        return Ok(());
+    }
+
     let mut settings = settings::get_webdav_sync_settings();
     if !should_run_auto_sync(settings.as_ref()) {
         return Ok(());

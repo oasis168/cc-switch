@@ -531,9 +531,15 @@ export function WebdavSyncSection({
   const lastSyncDisplay = lastSyncAt
     ? new Date(lastSyncAt * 1000).toLocaleString()
     : null;
+  const lastDownloadAt = config?.status?.lastDownloadAt;
+  const lastDownloadDisplay = lastDownloadAt
+    ? new Date(lastDownloadAt * 1000).toLocaleString()
+    : null;
   const lastError = config?.status?.lastError?.trim();
   const showAutoSyncError =
-    !!lastError && config?.status?.lastErrorSource === "auto";
+    !!lastError &&
+    (config?.status?.lastErrorSource === "auto" ||
+      config?.status?.lastErrorSource === "startup");
   const currentRemotePath = `/${form.remoteRoot.trim() || "cc-switch-sync"}/v2/db-v6/${form.profile.trim() || "default"}`;
   const remoteDbCompatDisplay = formatDbCompatVersion(
     remoteInfo?.dbCompatVersion,
@@ -684,20 +690,33 @@ export function WebdavSyncSection({
           </div>
         </div>
 
-        {/* Last sync time */}
-        {lastSyncDisplay && (
-          <p className="text-xs text-muted-foreground">
-            {t("settings.webdavSync.lastSync", { time: lastSyncDisplay })}
-          </p>
-        )}
+        {/* Last sync / download time */}
+        <div className="text-xs text-muted-foreground space-y-0.5">
+          {lastSyncDisplay && (
+            <p>
+              {t("settings.webdavSync.lastSync", { time: lastSyncDisplay })}
+            </p>
+          )}
+          {lastDownloadDisplay && (
+            <p>
+              {t("settings.webdavSync.lastDownload", {
+                time: lastDownloadDisplay,
+              })}
+            </p>
+          )}
+        </div>
         {showAutoSyncError && (
           <div className="rounded-lg border border-red-300/70 bg-red-50/80 px-3 py-2 text-xs text-red-900 dark:border-red-500/50 dark:bg-red-950/30 dark:text-red-200">
             <p className="font-medium">
-              {t("settings.webdavSync.autoSyncLastErrorTitle")}
+              {config?.status?.lastErrorSource === "startup"
+                ? t("settings.webdavSync.startupSyncLastErrorTitle")
+                : t("settings.webdavSync.autoSyncLastErrorTitle")}
             </p>
             <p className="mt-1 break-all whitespace-pre-wrap">{lastError}</p>
             <p className="mt-1 text-[11px] text-red-700/90 dark:text-red-300/80">
-              {t("settings.webdavSync.autoSyncLastErrorHint")}
+              {config?.status?.lastErrorSource === "startup"
+                ? t("settings.webdavSync.startupSyncLastErrorHint")
+                : t("settings.webdavSync.autoSyncLastErrorHint")}
             </p>
           </div>
         )}

@@ -871,6 +871,130 @@ pub fn run() {
 
                 initialize_common_config_snippets(&state);
 
+                // 启动时 WebDAV 云端下载：在自动上传开启的情况下，先从云端同步最新配置，
+                // 防止用本地旧数据覆盖云端的最新配置。下载失败会自动重试。
+                {
+                    let sync_settings = crate::settings::get_webdav_sync_settings();
+                    let should_attempt = sync_settings
+                        .as_ref()
+                        .map_or(false, |s| s.enabled && s.auto_sync);
+
+                    if let Some(ref s) = sync_settings {
+                        log::info!(
+                            "[WebDAV] 启动同步设置: enabled={}, auto_sync={}",
+                            s.enabled, s.auto_sync
+                        );
+                    } else {
+                        log::info!("[WebDAV] 启动同步设置: 未配置 WebDAV 同步");
+                    }
+
+                    if should_attempt {
+                        let mut ws = sync_settings.unwrap();
+                        let _guard = crate::services::webdav_auto_sync::AutoSyncSuppressionGuard::new();
+
+                        // 直接下载，跳过 fetch_remote_info 预检查（download 内部会自己查找远端数据，
+                        // 避免重复请求 manifest 导致耗时翻倍）
+                        const MAX_STARTUP_RETRY: u32 = 3;
+                        let mut attempt = 0u32;
+
+                        loop {
+                            attempt += 1;
+                            log::info!(
+                                "[WebDAV] 启动同步：正在从云端下载最新配置...（第 {attempt}/{MAX_STARTUP_RETRY} 次）"
+                            );
+
+                            let db_clone = state.db.clone();
+                            let download_result = crate::services::webdav_sync::run_with_sync_lock(
+                                crate::services::webdav_sync::download(&db_clone, &mut ws),
+                            )
+                            .await;
+
+                            match download_result {
+                                Ok(_) => {
+                                    log::info!("[WebDAV] 启动同步下载成功，正在应用配置...");
+                                    let db_for_post = state.db.clone();
+                                    let post_result = tauri::async_runtime::spawn_blocking(move || {
+                                        crate::commands::sync_support::run_post_import_sync(db_for_post)
+                                    })
+                                    .await;
+                                    if let Err(ref e) = post_result {
+                                        log::warn!("[WebDAV] 启动同步后置同步失败: {e}");
+                                    }
+                                    // 记录下载成功时间
+                                    ws.status.last_download_at = Some(chrono::Utc::now().timestamp());
+                                    ws.status.last_error = None;
+                                    ws.status.last_error_source = None;
+                                    let _ = crate::settings::update_webdav_sync_status(ws.status.clone());
+                                    let _ = app_handle.emit(
+                                        "webdav-sync-status-updated",
+                                        serde_json::json!({
+                                            "source": "startup",
+                                            "status": "downloaded",
+                                        }),
+                                    );
+                                    crate::services::webdav_auto_sync::mark_startup_sync_ready();
+                                    break;
+                                }
+                                Err(e) => {
+                                    let err_str = e.to_string();
+                                    log::warn!(
+                                        "[WebDAV] 启动同步下载失败（第 {attempt}/{MAX_STARTUP_RETRY} 次）: {e}"
+                                    );
+
+                                    if attempt < MAX_STARTUP_RETRY {
+                                        let delay_secs = 2u64.pow(attempt);
+                                        log::info!("[WebDAV] {delay_secs} 秒后重试...");
+                                        let _ = app_handle.emit(
+                                            "webdav-sync-status-updated",
+                                            serde_json::json!({
+                                                "source": "startup",
+                                                "status": "retrying",
+                                                "attempt": attempt,
+                                                "max_attempts": MAX_STARTUP_RETRY,
+                                                "retry_in_secs": delay_secs,
+                                            }),
+                                        );
+                                        tokio::time::sleep(
+                                            std::time::Duration::from_secs(delay_secs),
+                                        )
+                                        .await;
+                                        // 重新读取设置（密码等可能在等待期间被更新）
+                                        if let Some(updated) =
+                                            crate::settings::get_webdav_sync_settings()
+                                        {
+                                            ws = updated;
+                                        }
+                                    } else {
+                                        // 所有重试耗尽，记录错误但仍解除自动上传阻塞
+                                        log::warn!(
+                                            "[WebDAV] 启动同步下载已重试 {MAX_STARTUP_RETRY} 次均失败，自动上传将正常启用"
+                                        );
+                                        ws.status.last_error = Some(err_str);
+                                        ws.status.last_error_source =
+                                            Some("startup".to_string());
+                                        let _ = crate::settings::update_webdav_sync_status(
+                                            ws.status.clone(),
+                                        );
+                                        let _ = app_handle.emit(
+                                            "webdav-sync-status-updated",
+                                            serde_json::json!({
+                                                "source": "startup",
+                                                "status": "error",
+                                                "error": ws.status.last_error,
+                                                "retries_exhausted": true,
+                                            }),
+                                        );
+                                        crate::services::webdav_auto_sync::mark_startup_sync_ready();
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        crate::services::webdav_auto_sync::mark_startup_sync_ready();
+                    }
+                }
+
                 // 检查 settings 表中的代理状态，自动恢复代理服务
                 restore_proxy_state_on_startup(&state, &app_handle).await;
 

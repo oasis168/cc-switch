@@ -102,6 +102,10 @@ interface WebDavSyncStatusUpdatedPayload {
   source?: string;
   status?: string;
   error?: string;
+  attempt?: number;
+  max_attempts?: number;
+  retry_in_secs?: number;
+  retries_exhausted?: boolean;
 }
 
 const DEFAULT_DRAG_BAR_HEIGHT = isWindows() || isLinux() ? 0 : 28; // px
@@ -395,15 +399,53 @@ function App() {
               {}) as WebDavSyncStatusUpdatedPayload;
             await queryClient.invalidateQueries({ queryKey: ["settings"] });
 
-            if (payload.source !== "auto" || payload.status !== "error") {
+            if (payload.source === "startup" && payload.status === "retrying") {
+              toast.info(
+                t("settings.webdavSync.startupSyncRetryingToast", {
+                  attempt: payload.attempt,
+                  maxAttempts: payload.max_attempts,
+                  retryInSecs: payload.retry_in_secs,
+                }),
+              );
               return;
             }
 
-            toast.error(
-              t("settings.webdavSync.autoSyncFailedToast", {
-                error: payload.error || t("common.unknown"),
-              }),
-            );
+            if (payload.source === "startup" && payload.status === "downloaded") {
+              await queryClient.invalidateQueries();
+              toast.success(
+                t("settings.webdavSync.startupSyncDownloadedToast"),
+              );
+              return;
+            }
+
+            if (payload.status !== "error") {
+              return;
+            }
+
+            if (payload.source === "startup") {
+              if (payload.retries_exhausted) {
+                toast.warning(
+                  t("settings.webdavSync.startupSyncRetriesExhaustedToast", {
+                    error: payload.error || t("common.unknown"),
+                  }),
+                );
+              } else {
+                toast.error(
+                  t("settings.webdavSync.startupSyncFailedToast", {
+                    error: payload.error || t("common.unknown"),
+                  }),
+                );
+              }
+              return;
+            }
+
+            if (payload.source === "auto") {
+              toast.error(
+                t("settings.webdavSync.autoSyncFailedToast", {
+                  error: payload.error || t("common.unknown"),
+                }),
+              );
+            }
           },
         );
         if (!active) {

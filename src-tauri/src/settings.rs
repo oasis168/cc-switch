@@ -103,6 +103,8 @@ pub struct WebDavSyncStatus {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_sync_at: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_download_at: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_error: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_error_source: Option<String>,
