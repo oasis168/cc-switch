@@ -96,19 +96,26 @@ impl Database {
         sql_raw: &str,
         preserve_tables: &[&str],
     ) -> Result<String, AppError> {
+        let t0 = std::time::Instant::now();
         let sql_content = sql_raw.trim_start_matches('\u{feff}');
         Self::validate_cc_switch_sql_export(sql_content)?;
+        log::info!("[DB] import: validate SQL 耗时 {}ms", t0.elapsed().as_millis());
 
         // 导入前备份现有数据库
+        let t1 = std::time::Instant::now();
         let backup_path = self.backup_database_file()?;
+        log::info!("[DB] import: backup_database_file 耗时 {}ms", t1.elapsed().as_millis());
 
+        let t2 = std::time::Instant::now();
         let local_snapshot = if preserve_tables.is_empty() {
             None
         } else {
             Some(self.snapshot_to_memory()?)
         };
+        log::info!("[DB] import: snapshot_to_memory 耗时 {}ms", t2.elapsed().as_millis());
 
         // 在临时数据库执行导入，确保失败不会污染主库
+        let t3 = std::time::Instant::now();
         let temp_file = NamedTempFile::new().map_err(|e| AppError::IoContext {
             context: "创建临时数据库文件失败".to_string(),
             source: e,
@@ -116,20 +123,26 @@ impl Database {
         let temp_path = temp_file.path().to_path_buf();
         let temp_conn =
             Connection::open(&temp_path).map_err(|e| AppError::Database(e.to_string()))?;
+        log::info!("[DB] import: create temp db 耗时 {}ms", t3.elapsed().as_millis());
 
+        let t4 = std::time::Instant::now();
         temp_conn
             .execute_batch(sql_content)
             .map_err(|e| AppError::Database(format!("执行 SQL 导入失败: {e}")))?;
+        log::info!("[DB] import: execute_batch {} 字节 SQL 耗时 {}ms", sql_content.len(), t4.elapsed().as_millis());
 
         // 补齐缺失表/索引并进行基础校验
+        let t5 = std::time::Instant::now();
         Self::create_tables_on_conn(&temp_conn)?;
         Self::apply_schema_migrations_on_conn(&temp_conn)?;
         Self::validate_basic_state(&temp_conn)?;
         if let Some(local_snapshot) = local_snapshot.as_ref() {
             Self::restore_tables(local_snapshot, &temp_conn, preserve_tables)?;
         }
+        log::info!("[DB] import: schema + restore 耗时 {}ms", t5.elapsed().as_millis());
 
         // 使用 Backup 将临时库原子写回主库
+        let t6 = std::time::Instant::now();
         {
             let mut main_conn = lock_conn!(self.conn);
             let backup = Backup::new(&temp_conn, &mut main_conn)
@@ -138,6 +151,8 @@ impl Database {
                 .step(-1)
                 .map_err(|e| AppError::Database(e.to_string()))?;
         }
+        log::info!("[DB] import: backup to main db 耗时 {}ms", t6.elapsed().as_millis());
+        log::info!("[DB] import: 总耗时 {}ms", t0.elapsed().as_millis());
 
         let backup_id = backup_path
             .and_then(|p| p.file_stem().map(|s| s.to_string_lossy().to_string()))
