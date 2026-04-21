@@ -95,6 +95,16 @@ pub async fn webdav_test_connection(
     webdav_sync_service::check_connection(&resolved)
         .await
         .map_err(|e| e.to_string())?;
+
+    // 测试连接成功，清除之前的同步错误信息
+    if let Some(mut ws) = settings::get_webdav_sync_settings() {
+        if ws.status.last_error.is_some() {
+            ws.status.last_error = None;
+            ws.status.last_error_source = None;
+            let _ = settings::update_webdav_sync_status(ws.status);
+        }
+    }
+
     Ok(json!({
         "success": true,
         "message": "WebDAV connection ok"

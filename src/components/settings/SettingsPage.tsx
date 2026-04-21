@@ -211,7 +211,7 @@ export function SettingsPage({
 
           <div className="flex-1 min-h-0 flex flex-col">
             <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2">
-              <TabsContent value="general" className="space-y-6 mt-0">
+              <TabsContent value="general" className="space-y-6 mt-0 pb-6">
                 {settings ? (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}

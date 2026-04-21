@@ -350,6 +350,7 @@ export function WebdavSyncSection({
     try {
       await settingsApi.webdavTestConnection(settings, !passwordTouched);
       toast.success(t("settings.webdavSync.testSuccess"));
+      await queryClient.invalidateQueries();
     } catch (error) {
       toast.error(
         t("settings.webdavSync.testFailed", {
@@ -359,7 +360,7 @@ export function WebdavSyncSection({
     } finally {
       setActionState("idle");
     }
-  }, [buildSettings, passwordTouched, t]);
+  }, [buildSettings, passwordTouched, queryClient, t]);
 
   const handleSave = useCallback(async () => {
     const settings = buildSettings();
