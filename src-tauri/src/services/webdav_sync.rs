@@ -142,26 +142,17 @@ pub async fn upload(
     let auth = auth_for(settings);
     let dir_segs = remote_dir_segments(settings, RemoteLayout::Current);
 
-    let t0 = std::time::Instant::now();
     ensure_remote_directories(&settings.base_url, &dir_segs, &auth).await?;
-    log::info!("[WebDAV] upload: ensure_remote_directories 耗时 {}ms", t0.elapsed().as_millis());
 
-    let t1 = std::time::Instant::now();
     let snapshot = build_local_snapshot(db, settings)?;
-    log::info!("[WebDAV] upload: build_local_snapshot 耗时 {}ms", t1.elapsed().as_millis());
 
     // Upload order: artifacts first, manifest last (best-effort consistency)
-    let t2 = std::time::Instant::now();
     let db_url = remote_file_url(settings, RemoteLayout::Current, REMOTE_DB_SQL)?;
     put_bytes(&db_url, &auth, snapshot.db_sql.clone(), "application/sql").await?;
-    log::info!("[WebDAV] upload: db.sql {} 字节, 耗时 {}ms", snapshot.db_sql.len(), t2.elapsed().as_millis());
 
-    let t3 = std::time::Instant::now();
     let skills_url = remote_file_url(settings, RemoteLayout::Current, REMOTE_SKILLS_ZIP)?;
     put_bytes(&skills_url, &auth, snapshot.skills_zip.clone(), "application/zip").await?;
-    log::info!("[WebDAV] upload: skills.zip {} 字节, 耗时 {}ms", snapshot.skills_zip.len(), t3.elapsed().as_millis());
 
-    let t4 = std::time::Instant::now();
     let manifest_url = remote_file_url(settings, RemoteLayout::Current, REMOTE_MANIFEST)?;
     put_bytes(
         &manifest_url,
@@ -170,7 +161,6 @@ pub async fn upload(
         "application/json",
     )
     .await?;
-    log::info!("[WebDAV] upload: manifest.json 耗时 {}ms", t4.elapsed().as_millis());
 
     // Fetch etag (best-effort, don't fail the upload)
     let etag = match head_etag(&manifest_url, &auth).await {
@@ -198,7 +188,6 @@ pub async fn download(
     settings.validate()?;
     let auth = auth_for(settings);
 
-    let t0 = std::time::Instant::now();
     let snapshot = find_remote_snapshot(settings, &auth)
         .await?
         .ok_or_else(|| {
@@ -208,11 +197,9 @@ pub async fn download(
                 "No downloadable sync data found on the remote.",
             )
         })?;
-    log::info!("[WebDAV] download: find_remote_snapshot 耗时 {}ms", t0.elapsed().as_millis());
 
     validate_manifest_compat(&snapshot.manifest, snapshot.layout)?;
 
-    let t1 = std::time::Instant::now();
     let db_sql = download_and_verify(
         settings,
         &auth,
@@ -221,9 +208,7 @@ pub async fn download(
         &snapshot.manifest.artifacts,
     )
     .await?;
-    log::info!("[WebDAV] download: db.sql {} 字节, 耗时 {}ms", db_sql.len(), t1.elapsed().as_millis());
 
-    let t2 = std::time::Instant::now();
     let skills_zip = download_and_verify(
         settings,
         &auth,
@@ -232,11 +217,8 @@ pub async fn download(
         &snapshot.manifest.artifacts,
     )
     .await?;
-    log::info!("[WebDAV] download: skills.zip {} 字节, 耗时 {}ms", skills_zip.len(), t2.elapsed().as_millis());
 
-    let t3 = std::time::Instant::now();
     apply_snapshot(db, &db_sql, &skills_zip)?;
-    log::info!("[WebDAV] download: apply_snapshot 耗时 {}ms", t3.elapsed().as_millis());
 
     let manifest_hash = sha256_hex(&snapshot.manifest_bytes);
     let _persisted = persist_sync_success_best_effort(
