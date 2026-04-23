@@ -17,6 +17,7 @@ pub struct TrayTexts {
     pub lightweight_mode: &'static str,
     pub quit: &'static str,
     pub _auto_label: &'static str,
+    pub tooltip: &'static str,
 }
 
 impl TrayTexts {
@@ -28,6 +29,7 @@ impl TrayTexts {
                 lightweight_mode: "Lightweight Mode",
                 quit: "Quit",
                 _auto_label: "Auto (Failover)",
+                tooltip: "CC Switch",
             },
             "ja" => Self {
                 show_main: "メインウィンドウを開く",
@@ -35,6 +37,7 @@ impl TrayTexts {
                 lightweight_mode: "軽量モード",
                 quit: "終了",
                 _auto_label: "自動 (フェイルオーバー)",
+                tooltip: "CC Switch",
             },
             _ => Self {
                 show_main: "打开主界面",
@@ -42,6 +45,7 @@ impl TrayTexts {
                 lightweight_mode: "轻量模式",
                 quit: "退出",
                 _auto_label: "自动 (故障转移)",
+                tooltip: "CC Switch",
             },
         }
     }

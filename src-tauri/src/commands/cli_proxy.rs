@@ -56,3 +56,15 @@ pub fn apply_cli_proxy(state: State<crate::AppState>) -> Result<(), String> {
 pub fn get_current_cli_proxy_env() -> Option<String> {
     env_manager::get_cli_proxy_env()
 }
+
+#[tauri::command]
+pub async fn scan_and_clear_local_git_proxy(
+    folder: String,
+) -> Result<env_manager::LocalGitProxyResult, String> {
+    let root = std::path::PathBuf::from(&folder);
+    tokio::task::spawn_blocking(move || {
+        env_manager::scan_and_clear_local_git_proxy(&root, 5)
+    })
+    .await
+    .map_err(|e| format!("扫描任务失败: {e}"))?
+}

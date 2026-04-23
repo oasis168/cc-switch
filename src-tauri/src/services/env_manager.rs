@@ -419,12 +419,18 @@ fn hidden_cmd(program: &str) -> std::process::Command {
 fn set_tool_proxy_configs(proxy_url: &str) -> Result<(), String> {
     let home = dirs::home_dir().ok_or("无法获取用户主目录")?;
 
-    // git: ~/.gitconfig
+    // git: ~/.gitconfig，同时尝试 system 级别（静默忽略权限不足）
     let _ = hidden_cmd("git")
         .args(["config", "--global", "http.proxy", proxy_url])
         .output();
     let _ = hidden_cmd("git")
         .args(["config", "--global", "https.proxy", proxy_url])
+        .output();
+    let _ = hidden_cmd("git")
+        .args(["config", "--system", "http.proxy", proxy_url])
+        .output();
+    let _ = hidden_cmd("git")
+        .args(["config", "--system", "https.proxy", proxy_url])
         .output();
 
     // pip: ~/pip/pip.ini (Windows) or ~/.config/pip/pip.conf (Unix)
@@ -457,12 +463,18 @@ fn set_tool_proxy_configs(proxy_url: &str) -> Result<(), String> {
 fn clear_tool_proxy_configs() -> Result<(), String> {
     let home = dirs::home_dir().ok_or("无法获取用户主目录")?;
 
-    // git
+    // git: 清除 global，再尝试 system（可能需要管理员权限，静默忽略失败）
     let _ = hidden_cmd("git")
         .args(["config", "--global", "--unset", "http.proxy"])
         .output();
     let _ = hidden_cmd("git")
         .args(["config", "--global", "--unset", "https.proxy"])
+        .output();
+    let _ = hidden_cmd("git")
+        .args(["config", "--system", "--unset", "http.proxy"])
+        .output();
+    let _ = hidden_cmd("git")
+        .args(["config", "--system", "--unset", "https.proxy"])
         .output();
 
     // pip
@@ -519,14 +531,17 @@ pub fn get_cli_proxy_env() -> Option<String> {
         }
     }
 
-    // git
-    if let Ok(output) = hidden_cmd("git")
-        .args(["config", "--global", "http.proxy"])
-        .output()
-    {
-        let val = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if !val.is_empty() {
-            parts.push(format!("Git: {val}"));
+    // git（global > system，与 git config --get 行为一致）
+    for scope in &["--global", "--system"] {
+        if let Ok(output) = hidden_cmd("git")
+            .args(["config", *scope, "http.proxy"])
+            .output()
+        {
+            let val = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !val.is_empty() {
+                parts.push(format!("Git: {val}"));
+                break;
+            }
         }
     }
 
@@ -568,6 +583,122 @@ pub fn get_cli_proxy_env() -> Option<String> {
         None
     } else {
         Some(parts.join(" | "))
+    }
+}
+
+/// 清除 git 仓库 local 代理的扫描结果
+#[derive(Debug, Clone, Serialize)]
+pub struct LocalGitProxyResult {
+    pub scanned: u32,
+    pub cleared: u32,
+    pub details: Vec<String>,
+}
+
+/// 递归扫描指定目录下的所有 git 仓库，清除每个仓库的 local http.proxy / https.proxy
+pub fn scan_and_clear_local_git_proxy(
+    root: &std::path::Path,
+    max_depth: u32,
+) -> Result<LocalGitProxyResult, String> {
+    if !root.exists() || !root.is_dir() {
+        return Err(format!("目录不存在或不是文件夹: {}", root.display()));
+    }
+
+    let mut result = LocalGitProxyResult {
+        scanned: 0,
+        cleared: 0,
+        details: Vec::new(),
+    };
+
+    scan_dir_for_git_repos(root, 0, max_depth, &mut result);
+
+    Ok(result)
+}
+
+fn scan_dir_for_git_repos(
+    dir: &std::path::Path,
+    current_depth: u32,
+    max_depth: u32,
+    result: &mut LocalGitProxyResult,
+) {
+    if current_depth > max_depth {
+        return;
+    }
+
+    let entries = match fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(_) => return,
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+
+        // 检测到 .git 目录 → 这是一个 git 仓库
+        if path.is_dir() && path.file_name().is_some_and(|n| n == ".git") {
+            let repo_dir = dir;
+            result.scanned += 1;
+            let repo_name = repo_dir
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| repo_dir.display().to_string());
+
+            let mut had_proxy = false;
+
+            // 清除 http.proxy
+            if let Ok(output) = hidden_cmd("git")
+                .args(["config", "--local", "--unset", "http.proxy"])
+                .current_dir(repo_dir)
+                .output()
+            {
+                // --unset 成功(exit 0)说明确实有这个配置
+                if output.status.success() {
+                    had_proxy = true;
+                }
+            }
+
+            // 清除 https.proxy
+            if let Ok(output) = hidden_cmd("git")
+                .args(["config", "--local", "--unset", "https.proxy"])
+                .current_dir(repo_dir)
+                .output()
+            {
+                if output.status.success() {
+                    had_proxy = true;
+                }
+            }
+
+            if had_proxy {
+                result.cleared += 1;
+                result.details.push(format!("{} (已清除)", repo_name));
+            }
+
+            // .git 目录本身就是仓库标记，不需要继续递归其内部
+            continue;
+        }
+
+        // 递归子目录
+        if path.is_dir() {
+            // 跳过常见的非项目目录，加速扫描
+            let dir_name = path.file_name().map(|n| n.to_string_lossy().to_string());
+            if let Some(name) = dir_name {
+                if matches!(
+                    name.as_str(),
+                    "node_modules"
+                        | ".venv"
+                        | "venv"
+                        | "__pycache__"
+                        | ".tox"
+                        | "target"
+                        | "build"
+                        | "dist"
+                        | ".cache"
+                        | ".cargo"
+                        | ".rustup"
+                ) {
+                    continue;
+                }
+            }
+            scan_dir_for_git_repos(&path, current_depth + 1, max_depth, result);
+        }
     }
 }
 

@@ -2446,7 +2446,12 @@
     "hintIndependent": "プロキシ URL を入力して「適用」をクリックしてください",
     "clear": "クリア",
     "cleared": "CLI プロキシ環境変数をクリアしました",
-    "detecting": "検出中..."
+    "detecting": "検出中...",
+    "clearLocal": "プロジェクトプロキシをクリア",
+    "clearLocalDesc": "フォルダを選択して、すべての git リポジトリのローカルプロキシ設定を再帰的にクリア",
+    "clearLocalScanning": "スキャン中...",
+    "clearLocalResult": "{{scanned}} リポジトリをスキャン、{{cleared}} プロキシをクリア",
+    "clearLocalNone": "プロキシ設定のある git リポジトリが見つかりません"
   },
   "subscription": {
     "title": "サブスクリプションクォータ",

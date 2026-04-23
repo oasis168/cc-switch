@@ -2467,7 +2467,12 @@
     "hintIndependent": "请输入代理地址后点击「应用」",
     "clear": "清除",
     "cleared": "已清除 CLI 代理环境变量",
-    "detecting": "检测中..."
+    "detecting": "检测中...",
+    "clearLocal": "清除项目代理",
+    "clearLocalDesc": "选择文件夹，递归清除所有 git 仓库的本地代理设置",
+    "clearLocalScanning": "正在扫描...",
+    "clearLocalResult": "扫描了 {{scanned}} 个仓库，清除了 {{cleared}} 个代理",
+    "clearLocalNone": "未找到设置了代理的 git 仓库"
   },
   "subscription": {
     "title": "订阅额度",

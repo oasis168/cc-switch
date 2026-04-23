@@ -729,8 +729,13 @@ pub fn run() {
             // 创建动态托盘菜单
             let menu = tray::create_tray_menu(app.handle(), &app_state)?;
 
+            // 托盘 tooltip
+            let app_settings = crate::settings::get_settings();
+            let tray_texts = tray::TrayTexts::from_language(app_settings.language.as_deref().unwrap_or("zh"));
+
             // 构建托盘
             let mut tray_builder = TrayIconBuilder::with_id("main")
+                .tooltip(tray_texts.tooltip)
                 .on_tray_icon_event(|_tray, event| match event {
                     // 左键点击已通过 show_menu_on_left_click(true) 打开菜单，这里不再额外处理
                     TrayIconEvent::Click { .. } => {}
@@ -1444,6 +1449,7 @@ pub fn run() {
             commands::set_cli_proxy_config,
             commands::apply_cli_proxy,
             commands::get_current_cli_proxy_env,
+            commands::scan_and_clear_local_git_proxy,
             // Window theme control
             commands::set_window_theme,
             // Generic managed auth commands

@@ -13,3 +13,12 @@ export const setCliProxyConfig = (config: CliProxyConfig) =>
 export const applyCliProxy = () => invoke('apply_cli_proxy')
 
 export const getCurrentCliProxyEnv = () => invoke<string | null>('get_current_cli_proxy_env')
+
+export interface LocalGitProxyResult {
+  scanned: number
+  cleared: number
+  details: string[]
+}
+
+export const scanAndClearLocalGitProxy = (folder: string) =>
+  invoke<LocalGitProxyResult>('scan_and_clear_local_git_proxy', { folder })

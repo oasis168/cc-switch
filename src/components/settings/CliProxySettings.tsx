@@ -4,13 +4,14 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Loader2, Search, Trash2 } from 'lucide-react'
+import { Loader2, Search, Trash2, FolderOpen } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   getCliProxyConfig,
   setCliProxyConfig,
   applyCliProxy,
   getCurrentCliProxyEnv,
+  scanAndClearLocalGitProxy,
   type CliProxyConfig,
 } from '@/lib/api/cliProxy'
 import { useScanProxies } from '@/hooks/useGlobalProxy'
@@ -112,6 +113,32 @@ export function CliProxySettings() {
     }
   }
 
+  const handleClearLocal = async () => {
+    const { open } = await import('@tauri-apps/plugin-dialog')
+    const selected = await open({ directory: true, multiple: false })
+    if (!selected) return
+
+    const folder = typeof selected === 'string' ? selected : selected
+    setLoading(true)
+    try {
+      const result = await scanAndClearLocalGitProxy(folder)
+      if (result.cleared > 0) {
+        toast.success(
+          t('cliProxy.clearLocalResult', {
+            scanned: result.scanned,
+            cleared: result.cleared,
+          }),
+        )
+      } else {
+        toast.info(t('cliProxy.clearLocalNone'))
+      }
+    } catch (error) {
+      toast.error(String(error))
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div>
@@ -153,6 +180,7 @@ export function CliProxySettings() {
         </div>
       )}
 
+      {/* 区块一：当前环境变量 */}
       <div className="space-y-1">
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">{t('cliProxy.currentEnv')}:</span>
@@ -171,6 +199,18 @@ export function CliProxySettings() {
             currentEnv || t('cliProxy.notSet')
           )}
         </div>
+      </div>
+
+      {/* 区块二：清除项目代理 */}
+      <div className="space-y-1 pt-2 border-t border-border">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">{t('cliProxy.clearLocal')}:</span>
+          <Button onClick={handleClearLocal} disabled={loading} size="sm" variant="ghost">
+            <FolderOpen className="h-3 w-3 mr-1" />
+            {t('cliProxy.clearLocal')}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">{t('cliProxy.clearLocalDesc')}</p>
       </div>
     </div>
   )

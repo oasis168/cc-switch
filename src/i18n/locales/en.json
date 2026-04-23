@@ -2466,7 +2466,12 @@
     "hintIndependent": "Enter proxy URL and click Apply",
     "clear": "Clear",
     "cleared": "CLI proxy environment variables cleared",
-    "detecting": "Detecting..."
+    "detecting": "Detecting...",
+    "clearLocal": "Clear project proxy",
+    "clearLocalDesc": "Select a folder to recursively clear local proxy settings in all git repos",
+    "clearLocalScanning": "Scanning...",
+    "clearLocalResult": "Scanned {{scanned}} repos, cleared {{cleared}} proxies",
+    "clearLocalNone": "No git repos with proxy settings found"
   },
   "subscription": {
     "title": "Subscription Quota",
