@@ -211,7 +211,7 @@ export function SettingsPage({
 
           <div className="flex-1 min-h-0 flex flex-col">
             <div className="flex-1 overflow-y-auto overflow-x-hidden pr-2">
-              <TabsContent value="general" className="space-y-6 mt-0 pb-6">
+              <TabsContent value="general" className="space-y-6 mt-0">
                 {settings ? (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
@@ -316,6 +316,8 @@ export function SettingsPage({
                             codexDir={settings.codexConfigDir}
                             geminiDir={settings.geminiConfigDir}
                             opencodeDir={settings.opencodeConfigDir}
+                            openclawDir={settings.openclawConfigDir}
+                            hermesDir={settings.hermesConfigDir}
                             onDirectoryChange={updateDirectory}
                             onBrowseDirectory={browseDirectory}
                             onResetDirectory={resetDirectory}
@@ -473,7 +475,7 @@ export function SettingsPage({
 
             {activeTab === "advanced" && settings && (
               <div
-                className="flex-shrink-0 py-4 border-t border-border-default"
+                className="flex-shrink-0 pt-4 border-t border-border-default"
                 style={{ backgroundColor: "hsl(var(--background))" }}
               >
                 <div className="px-6 flex items-center justify-end gap-3">

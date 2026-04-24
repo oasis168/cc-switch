@@ -74,6 +74,20 @@ export interface UsageScript {
   };
 }
 
+const DEFAULT_USAGE_SCRIPT: UsageScript = {
+  enabled: false,
+  language: "javascript",
+  code: "",
+  timeout: 10,
+  autoQueryInterval: 5,
+};
+
+export function createUsageScript(
+  overrides?: Partial<UsageScript>,
+): UsageScript {
+  return { ...DEFAULT_USAGE_SCRIPT, ...overrides };
+}
+
 // 单个套餐用量数据
 export interface UsageData {
   planName?: string; // 套餐名称（可选）
@@ -159,7 +173,12 @@ export interface ProviderMeta {
   // - "anthropic": 原生 Anthropic Messages API 格式，直接透传
   // - "openai_chat": OpenAI Chat Completions 格式，需要格式转换
   // - "openai_responses": OpenAI Responses API 格式，需要格式转换
-  apiFormat?: "anthropic" | "openai_chat" | "openai_responses";
+  // - "gemini_native": Gemini Native generateContent API 格式，需要格式转换
+  apiFormat?:
+    | "anthropic"
+    | "openai_chat"
+    | "openai_responses"
+    | "gemini_native";
   // 通用认证绑定
   authBinding?: AuthBinding;
   // Claude 认证字段名
@@ -168,6 +187,8 @@ export interface ProviderMeta {
   isFullUrl?: boolean;
   // Prompt cache key for OpenAI Responses-compatible endpoints (improves cache hit rate)
   promptCacheKey?: string;
+  // Codex OAuth FAST mode: injects service_tier="priority" on ChatGPT Codex requests
+  codexFastMode?: boolean;
   // 供应商类型（用于识别 Copilot 等特殊供应商）
   providerType?: string;
   // GitHub Copilot 关联账号 ID（旧字段，保留兼容读取）
@@ -184,7 +205,12 @@ export type SkillStorageLocation = "cc_switch" | "unified";
 // - "anthropic": 原生 Anthropic Messages API 格式，直接透传
 // - "openai_chat": OpenAI Chat Completions 格式，需要格式转换
 // - "openai_responses": OpenAI Responses API 格式，需要格式转换
-export type ClaudeApiFormat = "anthropic" | "openai_chat" | "openai_responses";
+// - "gemini_native": Gemini Native generateContent API 格式，需要格式转换
+export type ClaudeApiFormat =
+  | "anthropic"
+  | "openai_chat"
+  | "openai_responses"
+  | "gemini_native";
 
 // Claude 认证字段类型
 export type ClaudeApiKeyField = "ANTHROPIC_AUTH_TOKEN" | "ANTHROPIC_API_KEY";
@@ -196,6 +222,7 @@ export interface VisibleApps {
   gemini: boolean;
   opencode: boolean;
   openclaw: boolean;
+  hermes: boolean;
 }
 
 // WebDAV 同步状态
@@ -292,6 +319,8 @@ export interface Settings {
   opencodeConfigDir?: string;
   // 覆盖 OpenClaw 配置目录（可选）
   openclawConfigDir?: string;
+  // 覆盖 Hermes 配置目录（可选）
+  hermesConfigDir?: string;
 
   // ===== 当前供应商 ID（设备级）=====
   // 当前 Claude 供应商 ID（优先于数据库 is_current）
@@ -371,6 +400,7 @@ export interface McpApps {
   gemini: boolean;
   opencode: boolean;
   openclaw: boolean;
+  hermes: boolean;
 }
 
 // MCP 服务器条目（v3.7.0 统一结构）
@@ -594,3 +624,37 @@ export type VscodeConfigStatus =
   | { status: "integrationDisabled" }
   | { status: "proxyNotRunning"; baseUrl: string }
   | { status: "mismatch"; currentBaseUrl: string; vscodeBaseUrl: string };
+
+// ============================================================================
+// Hermes Agent 专属配置（v3.12.0+）
+// ============================================================================
+
+// Hermes model 配置（顶层 model: section）
+export interface HermesModelConfig {
+  default?: string;
+  provider?: string;
+}
+
+// Hermes 配置健康警告
+export interface HermesHealthWarning {
+  code: string;
+  message: string;
+  path?: string;
+}
+
+// Hermes 写入结果
+export interface HermesWriteOutcome {
+  backupPath?: string;
+  warnings: HermesHealthWarning[];
+}
+
+// Hermes memory 类型
+export type HermesMemoryKind = "memory" | "user";
+
+// Hermes memory 限制
+export interface HermesMemoryLimits {
+  memory: number;
+  user: number;
+  memoryEnabled: boolean;
+  userEnabled: boolean;
+}

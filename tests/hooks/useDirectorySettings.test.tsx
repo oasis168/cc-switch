@@ -218,12 +218,12 @@ describe("useDirectorySettings", () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     act(() => {
-      result.current.resetAllDirectories(
-        "/server/claude",
-        "/server/codex",
-        "/server/gemini",
-        "/server/opencode",
-      );
+      result.current.resetAllDirectories({
+        claude: "/server/claude",
+        codex: "/server/codex",
+        gemini: "/server/gemini",
+        opencode: "/server/opencode",
+      });
     });
 
     expect(result.current.resolvedDirs.claude).toBe("/server/claude");

@@ -9,7 +9,10 @@ use super::{
     failover_switch::FailoverSwitchManager,
     log_codes::fwd as log_fwd,
     provider_router::ProviderRouter,
-    providers::{get_adapter, AuthInfo, AuthStrategy, ProviderAdapter, ProviderType},
+    providers::{
+        gemini_shadow::GeminiShadowStore, get_adapter, AuthInfo, AuthStrategy, ProviderAdapter,
+        ProviderType,
+    },
     thinking_budget_rectifier::{rectify_thinking_budget, should_rectify_thinking_budget},
     thinking_rectifier::{
         normalize_thinking_type, rectify_anthropic_request, should_rectify_thinking_signature,
@@ -43,12 +46,18 @@ pub struct RequestForwarder {
     router: Arc<ProviderRouter>,
     status: Arc<RwLock<ProxyStatus>>,
     current_providers: Arc<RwLock<std::collections::HashMap<String, (String, String)>>>,
+    /// Gemini Native shadow state，用于 thoughtSignature / tool call 回放
+    gemini_shadow: Arc<GeminiShadowStore>,
     /// 故障转移切换管理器
     failover_manager: Arc<FailoverSwitchManager>,
     /// AppHandle，用于发射事件和更新托盘
     app_handle: Option<tauri::AppHandle>,
     /// 请求开始时的"当前供应商 ID"（用于判断是否需要同步 UI/托盘）
     current_provider_id_at_start: String,
+    /// 代理会话 ID（用于 Gemini Native shadow replay）
+    session_id: String,
+    /// Session ID 是否由客户端提供；生成值不能作为上游缓存身份。
+    session_client_provided: bool,
     /// 整流器配置
     rectifier_config: RectifierConfig,
     /// 优化器配置
@@ -66,9 +75,12 @@ impl RequestForwarder {
         non_streaming_timeout: u64,
         status: Arc<RwLock<ProxyStatus>>,
         current_providers: Arc<RwLock<std::collections::HashMap<String, (String, String)>>>,
+        gemini_shadow: Arc<GeminiShadowStore>,
         failover_manager: Arc<FailoverSwitchManager>,
         app_handle: Option<tauri::AppHandle>,
         current_provider_id_at_start: String,
+        session_id: String,
+        session_client_provided: bool,
         _streaming_first_byte_timeout: u64,
         _streaming_idle_timeout: u64,
         rectifier_config: RectifierConfig,
@@ -79,9 +91,12 @@ impl RequestForwarder {
             router,
             status,
             current_providers,
+            gemini_shadow,
             failover_manager,
             app_handle,
             current_provider_id_at_start,
+            session_id,
+            session_client_provided,
             rectifier_config,
             optimizer_config,
             copilot_optimizer_config,
@@ -937,6 +952,9 @@ impl RequestForwarder {
                     mapped_body,
                     provider,
                     api_format,
+                    self.session_client_provided
+                        .then_some(self.session_id.as_str()),
+                    Some(self.gemini_shadow.as_ref()),
                 )?
             } else {
                 adapter.transform_request(mapped_body, provider)?
@@ -953,6 +971,7 @@ impl RequestForwarder {
 
         // Codex OAuth 需要注入的 ChatGPT-Account-Id（在动态 token 获取期间填充）
         let mut codex_oauth_account_id: Option<String> = None;
+        let mut should_send_codex_oauth_session_headers = false;
 
         // 获取认证头（提前准备，用于内联替换）
         let mut auth_headers = if let Some(mut auth) = adapter.extract_auth(provider) {
@@ -1034,6 +1053,7 @@ impl RequestForwarder {
                     match token_result {
                         Ok(token) => {
                             auth = AuthInfo::new(token, AuthStrategy::CodexOAuth);
+                            should_send_codex_oauth_session_headers = true;
                             // 解析使用的 account_id（用于注入 ChatGPT-Account-Id header）
                             codex_oauth_account_id = match account_id {
                                 Some(id) => Some(id),
@@ -1089,6 +1109,13 @@ impl RequestForwarder {
                 }
             }
         }
+
+        let codex_oauth_session_headers =
+            if should_send_codex_oauth_session_headers && self.session_client_provided {
+                build_codex_oauth_session_headers(&self.session_id)
+            } else {
+                Vec::new()
+            };
 
         // Copilot 指纹头名（由 get_auth_headers 注入，需在原始头中去重）
         let copilot_fingerprint_headers: &[&str] = if is_copilot {
@@ -1286,6 +1313,12 @@ impl RequestForwarder {
             );
         }
 
+        // Codex OAuth 反代尽量对齐官方 Codex CLI 的会话路由信号。
+        // 只发送客户端提供的 session_id；生成的 UUID 每次不同，反而会破坏前缀缓存。
+        for (name, value) in codex_oauth_session_headers {
+            ordered_headers.insert(name, value);
+        }
+
         // 序列化请求体
         let body_bytes = serde_json::to_vec(&filtered_body)
             .map_err(|e| ProxyError::Internal(format!("Failed to serialize request body: {e}")))?;
@@ -1338,13 +1371,8 @@ impl RequestForwarder {
             self.non_streaming_timeout
         };
 
-        // 解析上游代理 URL（供应商单独代理 > 全局代理 > 无）
-        let proxy_config = provider.meta.as_ref().and_then(|m| m.proxy_config.as_ref());
-        let has_provider_proxy = proxy_config.map_or(false, |c| c.enabled);
-        let upstream_proxy_url: Option<String> = proxy_config
-            .filter(|c| c.enabled)
-            .and_then(super::http_client::build_proxy_url_from_config)
-            .or_else(super::http_client::get_current_proxy_url);
+        // 获取全局代理 URL
+        let upstream_proxy_url: Option<String> = super::http_client::get_current_proxy_url();
 
         // SOCKS5 代理不支持 CONNECT 隧道，需要用 reqwest
         let is_socks_proxy = upstream_proxy_url
@@ -1381,7 +1409,7 @@ impl RequestForwarder {
         let response = if is_socks_proxy {
             // SOCKS5 代理：走 reqwest
             log::debug!("[Forwarder] Using reqwest for SOCKS5 proxy");
-            let client = super::http_client::get_for_provider(proxy_config);
+            let client = super::http_client::get();
             match send_via_reqwest(client, ordered_headers.clone(), body_bytes.clone(), timeout).await {
                 Ok(resp) => ProxyResponse::Reqwest(resp),
                 Err(e) if e.is_connect() => {
@@ -1395,7 +1423,6 @@ impl RequestForwarder {
                     match send_via_reqwest(fresh_client, ordered_headers.clone(), body_bytes.clone(), timeout).await {
                         Ok(resp) => ProxyResponse::Reqwest(resp),
                         Err(e2) if e2.is_connect()
-                            && !has_provider_proxy
                             && !super::http_client::has_explicit_proxy() =>
                         {
                             // 阶段2：系统代理不可达，尝试直连
@@ -1480,7 +1507,6 @@ impl RequestForwarder {
                     match send_via_reqwest(fresh_client, ordered_headers.clone(), body_bytes.clone(), timeout).await {
                         Ok(resp) => ProxyResponse::Reqwest(resp),
                         Err(e2) if e2.is_connect()
-                            && !has_provider_proxy
                             && !super::http_client::has_explicit_proxy() =>
                         {
                             // 阶段2：系统代理不可达，尝试直连
@@ -1531,8 +1557,7 @@ impl RequestForwarder {
             Ok((response, resolved_claude_api_format))
         } else {
             let status_code = status.as_u16();
-            let body_bytes = response.bytes().await?;
-            let body_text = String::from_utf8(body_bytes.to_vec()).ok();
+            let body_text = String::from_utf8(response.bytes().await?.to_vec()).ok();
 
             // 详细记录上游错误
             log::error!(
@@ -1828,6 +1853,28 @@ fn append_query_to_full_url(base_url: &str, query: Option<&str>) -> String {
     }
 }
 
+fn build_codex_oauth_session_headers(
+    session_id: &str,
+) -> Vec<(http::HeaderName, http::HeaderValue)> {
+    let session_id = session_id.trim();
+    if session_id.is_empty() {
+        return Vec::new();
+    }
+
+    let mut headers = Vec::new();
+    if let Ok(value) = http::HeaderValue::from_str(session_id) {
+        headers.push((http::HeaderName::from_static("session_id"), value.clone()));
+        headers.push((http::HeaderName::from_static("x-client-request-id"), value));
+    }
+
+    let window_id = format!("{session_id}:0");
+    if let Ok(value) = http::HeaderValue::from_str(&window_id) {
+        headers.push((http::HeaderName::from_static("x-codex-window-id"), value));
+    }
+
+    headers
+}
+
 fn should_force_identity_encoding(
     endpoint: &str,
     body: &Value,
@@ -1935,6 +1982,28 @@ mod tests {
         let summary = summarize_text_for_log("line1\n\n line2   line3", 12);
 
         assert_eq!(summary, "line1 line2...");
+    }
+
+    #[test]
+    fn codex_oauth_session_headers_match_codex_cache_identity() {
+        let headers = build_codex_oauth_session_headers("session-123");
+        let mut map = http::HeaderMap::new();
+        for (name, value) in headers {
+            map.insert(name, value);
+        }
+
+        assert_eq!(
+            map.get("session_id"),
+            Some(&http::HeaderValue::from_static("session-123"))
+        );
+        assert_eq!(
+            map.get("x-client-request-id"),
+            Some(&http::HeaderValue::from_static("session-123"))
+        );
+        assert_eq!(
+            map.get("x-codex-window-id"),
+            Some(&http::HeaderValue::from_static("session-123:0"))
+        );
     }
 
     #[test]

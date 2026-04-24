@@ -147,6 +147,7 @@ pub(crate) fn build_provider_from_request(
         AppType::Gemini => build_gemini_settings(request),
         AppType::OpenCode => build_opencode_settings(request),
         AppType::OpenClaw => build_openclaw_settings(request),
+        AppType::Hermes => build_hermes_settings(request),
     };
 
     // Build usage script configuration if provided
@@ -416,6 +417,32 @@ fn build_openclaw_settings(request: &DeepLinkImportRequest) -> serde_json::Value
         config.insert(
             "models".to_string(),
             json!([{ "id": model, "name": model }]),
+        );
+    }
+
+    json!(config)
+}
+
+fn build_hermes_settings(request: &DeepLinkImportRequest) -> serde_json::Value {
+    let endpoint = get_primary_endpoint(request);
+
+    // Build Hermes provider config
+    // Format: { base_url, api_key, models }
+    let mut config = serde_json::Map::new();
+
+    if !endpoint.is_empty() {
+        config.insert("base_url".to_string(), json!(endpoint));
+    }
+
+    if let Some(api_key) = &request.api_key {
+        config.insert("api_key".to_string(), json!(api_key));
+    }
+
+    // Build models array (UI-friendly format)
+    if let Some(model) = &request.model {
+        config.insert(
+            "models".to_string(),
+            json!([{ "id": model }]),
         );
     }
 

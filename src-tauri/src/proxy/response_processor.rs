@@ -11,7 +11,7 @@ use super::{
     usage::parser::TokenUsage,
     ProxyError,
 };
-use axum::http::header::HeaderMap;
+use axum::http::{header::HeaderMap, HeaderName};
 use axum::response::{IntoResponse, Response};
 use bytes::Bytes;
 use futures::stream::{Stream, StreamExt};
@@ -66,6 +66,41 @@ fn get_content_encoding(headers: &HeaderMap) -> Option<String> {
         .and_then(|v| v.to_str().ok())
         .map(|s| s.trim().to_lowercase())
         .filter(|s| !s.is_empty() && s != "identity")
+}
+
+/// RFC 2616 / RFC 7230 中定义的不应被代理继续转发的响应头。
+const HOP_BY_HOP_RESPONSE_HEADERS: &[&str] = &[
+    "connection",
+    "keep-alive",
+    "proxy-authenticate",
+    "proxy-authorization",
+    "proxy-connection",
+    "te",
+    "trailer",
+    "trailers",
+    "transfer-encoding",
+    "upgrade",
+];
+
+/// 移除响应侧 hop-by-hop 头，以及 `Connection` 中点名的扩展头。
+pub(crate) fn strip_hop_by_hop_response_headers(headers: &mut HeaderMap) {
+    let connection_listed_headers: Vec<HeaderName> = headers
+        .get_all(axum::http::header::CONNECTION)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .flat_map(|value| value.split(','))
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .filter_map(|name| HeaderName::from_bytes(name.as_bytes()).ok())
+        .collect();
+
+    for name in HOP_BY_HOP_RESPONSE_HEADERS {
+        headers.remove(*name);
+    }
+
+    for name in connection_listed_headers {
+        headers.remove(name);
+    }
 }
 
 /// 移除在重建响应体后会失真的实体头。

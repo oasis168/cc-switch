@@ -17,6 +17,7 @@ mod health;
 pub mod http_client;
 pub mod hyper_client;
 pub mod log_codes;
+pub mod gemini_url;
 pub mod model_mapper;
 pub mod provider_router;
 pub mod providers;

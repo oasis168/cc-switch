@@ -9,6 +9,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+pub const SESSION_REQUEST_ID_PREFIX: &str = "session:";
+
 /// Token 使用量统计
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TokenUsage {
@@ -18,6 +20,7 @@ pub struct TokenUsage {
     pub cache_creation_tokens: u32,
     /// 从响应中提取的实际模型名称（如果可用）
     pub model: Option<String>,
+    pub message_id: Option<String>,
 }
 
 /// API 类型
@@ -31,6 +34,14 @@ pub enum ApiType {
 }
 
 impl TokenUsage {
+    /// 有 message_id 时返回 `session:{id}`，否则回退到随机 UUID。
+    pub fn dedup_request_id(&self) -> String {
+        self.message_id
+            .as_ref()
+            .map(|mid| format!("{SESSION_REQUEST_ID_PREFIX}{mid}"))
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string())
+    }
+
     /// 从 Claude API 非流式响应解析
     pub fn from_claude_response(body: &Value) -> Option<Self> {
         let usage = body.get("usage")?;
@@ -52,6 +63,7 @@ impl TokenUsage {
                 .and_then(|v| v.as_u64())
                 .unwrap_or(0) as u32,
             model,
+            message_id: None,
         })
     }
 
@@ -153,6 +165,7 @@ impl TokenUsage {
             cache_read_tokens: 0,
             cache_creation_tokens: 0,
             model: None,
+            message_id: None,
         })
     }
 
@@ -202,6 +215,7 @@ impl TokenUsage {
                 .and_then(|v| v.as_u64())
                 .unwrap_or(0) as u32,
             model,
+            message_id: None,
         })
     }
 
@@ -245,6 +259,7 @@ impl TokenUsage {
                 .and_then(|v| v.as_u64())
                 .unwrap_or(0) as u32,
             model,
+            message_id: None,
         })
     }
 
@@ -339,6 +354,7 @@ impl TokenUsage {
             cache_read_tokens: cached_tokens,
             cache_creation_tokens: 0,
             model,
+            message_id: None,
         })
     }
 
@@ -383,6 +399,7 @@ impl TokenUsage {
                 .unwrap_or(0) as u32,
             cache_creation_tokens: 0,
             model,
+            message_id: None,
         })
     }
 
@@ -433,6 +450,7 @@ impl TokenUsage {
                 cache_read_tokens: total_cache_read,
                 cache_creation_tokens: 0,
                 model,
+                message_id: None,
             })
         } else {
             None

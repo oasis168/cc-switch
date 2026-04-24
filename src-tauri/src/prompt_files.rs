@@ -16,6 +16,7 @@ pub fn prompt_file_path(app: &AppType) -> Result<PathBuf, AppError> {
         AppType::Gemini => get_gemini_dir(),
         AppType::OpenCode => get_opencode_dir(),
         AppType::OpenClaw => get_openclaw_dir(),
+        AppType::Hermes => crate::hermes_config::get_hermes_dir(),
     };
 
     let filename = match app {
@@ -24,6 +25,7 @@ pub fn prompt_file_path(app: &AppType) -> Result<PathBuf, AppError> {
         AppType::Gemini => "GEMINI.md",
         AppType::OpenCode => "AGENTS.md",
         AppType::OpenClaw => "AGENTS.md", // OpenClaw uses AGENTS.md for agent instructions
+        AppType::Hermes => "AGENTS.md",
     };
 
     Ok(base_dir.join(filename))

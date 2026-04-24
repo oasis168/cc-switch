@@ -4,6 +4,24 @@ pub(crate) fn strip_sse_field<'a>(line: &'a str, field: &str) -> Option<&'a str>
         .or_else(|| line.strip_prefix(&format!("{field}:")))
 }
 
+#[inline]
+pub(crate) fn take_sse_block(buffer: &mut String) -> Option<String> {
+    let mut best: Option<(usize, usize)> = None;
+
+    for (delimiter, len) in [("\r\n\r\n", 4usize), ("\n\n", 2usize)] {
+        if let Some(pos) = buffer.find(delimiter) {
+            if best.is_none_or(|(best_pos, _)| pos < best_pos) {
+                best = Some((pos, len));
+            }
+        }
+    }
+
+    let (pos, len) = best?;
+    let block = buffer[..pos].to_string();
+    buffer.drain(..pos + len);
+    Some(block)
+}
+
 /// Append raw bytes to a UTF-8 `String` buffer, correctly handling multi-byte
 /// characters that are split across chunk boundaries.
 ///

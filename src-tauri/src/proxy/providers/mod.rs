@@ -18,10 +18,14 @@ mod codex;
 pub mod codex_oauth_auth;
 pub mod copilot_auth;
 mod gemini;
+pub mod gemini_schema;
+pub mod gemini_shadow;
 pub mod models;
 pub mod streaming;
+pub mod streaming_gemini;
 pub mod streaming_responses;
 pub mod transform;
+pub mod transform_gemini;
 pub mod transform_responses;
 
 use crate::app_config::AppType;
@@ -170,6 +174,10 @@ impl ProviderType {
                 // OpenClaw doesn't support proxy, but return a default type for completeness
                 ProviderType::Codex // Fallback to Codex-like type
             }
+            AppType::Hermes => {
+                // Hermes doesn't support proxy, but return a default type for completeness
+                ProviderType::Codex // Fallback to Codex-like type
+            }
         }
     }
 
@@ -226,6 +234,10 @@ pub fn get_adapter(app_type: &AppType) -> Box<dyn ProviderAdapter> {
         }
         AppType::OpenClaw => {
             // OpenClaw doesn't support proxy, fallback to Codex adapter
+            Box::new(CodexAdapter::new())
+        }
+        AppType::Hermes => {
+            // Hermes doesn't support proxy, fallback to Codex adapter
             Box::new(CodexAdapter::new())
         }
     }

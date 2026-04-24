@@ -38,8 +38,13 @@ import {
   type OpenClawProviderPreset,
   type OpenClawSuggestedDefaults,
 } from "@/config/openclawProviderPresets";
+import {
+  hermesProviderPresets,
+  type HermesProviderPreset,
+} from "@/config/hermesProviderPresets";
 import { OpenCodeFormFields } from "./OpenCodeFormFields";
 import { OpenClawFormFields } from "./OpenClawFormFields";
+import { HermesFormFields } from "./HermesFormFields";
 import type { UniversalProviderPreset } from "@/config/universalProviderPresets";
 import {
   applyTemplateValues,
@@ -81,6 +86,7 @@ import {
   useOpencodeFormState,
   useOmoDraftState,
   useOpenclawFormState,
+  useHermesFormState,
   useCopilotAuth,
   useCodexOauth,
 } from "./hooks";
@@ -94,6 +100,7 @@ import {
   OPENCLAW_DEFAULT_CONFIG,
   normalizePricingSource,
 } from "./helpers/opencodeFormUtils";
+import { HERMES_DEFAULT_CONFIG } from "./hooks/useHermesFormState";
 import { resolveManagedAccountId } from "@/lib/authBinding";
 import { useOpenClawLiveProviderIds } from "@/hooks/useOpenClaw";
 
@@ -103,8 +110,8 @@ type PresetEntry = {
     | ProviderPreset
     | CodexProviderPreset
     | GeminiProviderPreset
-    | OpenCodeProviderPreset
-    | OpenClawProviderPreset;
+    | OpenClawProviderPreset
+    | HermesProviderPreset;
 };
 
 interface ProviderFormProps {
@@ -258,7 +265,9 @@ export function ProviderForm({
               ? OPENCODE_DEFAULT_CONFIG
               : appId === "openclaw"
                 ? OPENCLAW_DEFAULT_CONFIG
-                : CLAUDE_DEFAULT_CONFIG,
+                : appId === "hermes"
+                  ? HERMES_DEFAULT_CONFIG
+                  : CLAUDE_DEFAULT_CONFIG,
       icon: initialData?.icon ?? "",
       iconColor: initialData?.iconColor ?? "",
     }),
@@ -319,7 +328,6 @@ export function ProviderForm({
 
   const {
     claudeModel,
-    reasoningModel,
     defaultHaikuModel,
     defaultSonnetModel,
     defaultOpusModel,
@@ -377,6 +385,9 @@ export function ProviderForm({
   const [selectedCodexAccountId, setSelectedCodexAccountId] = useState<
     string | null
   >(() => resolveManagedAccountId(initialData?.meta, "codex_oauth"));
+  const [codexFastMode, setCodexFastMode] = useState<boolean>(
+    () => initialData?.meta?.codexFastMode ?? false,
+  );
 
   const {
     codexAuth,
@@ -453,6 +464,11 @@ export function ProviderForm({
     } else if (appId === "openclaw") {
       return openclawProviderPresets.map<PresetEntry>((preset, index) => ({
         id: `openclaw-${index}`,
+        preset,
+      }));
+    } else if (appId === "hermes") {
+      return hermesProviderPresets.map<PresetEntry>((preset, index) => ({
+        id: `hermes-${index}`,
         preset,
       }));
     }
@@ -649,6 +665,14 @@ export function ProviderForm({
     data: openclawLiveProviderIds = [],
     isLoading: isOpenclawLiveProviderIdsLoading,
   } = useOpenClawLiveProviderIds(appId === "openclaw");
+
+  const hermesForm = useHermesFormState({
+    initialData,
+    appId,
+    providerId,
+    onSettingsConfigChange: (config) => form.setValue("settingsConfig", config),
+    getSettingsConfig: () => form.getValues("settingsConfig"),
+  });
 
   const additiveExistingProviderKeys = useMemo(() => {
     if (appId === "opencode" && !isAnyOmoCategory) {
@@ -1043,7 +1067,7 @@ export function ProviderForm({
     const providerType =
       templatePreset?.providerType || initialData?.meta?.providerType;
 
-    payload.meta = {
+    const nextMeta: ProviderMeta = {
       ...(baseMeta ?? {}),
       commonConfigEnabled:
         appId === "claude"
@@ -1074,6 +1098,7 @@ export function ProviderForm({
         isCopilotProvider && selectedGitHubAccountId
           ? selectedGitHubAccountId
           : undefined,
+      codexFastMode: isCodexOauthProvider ? codexFastMode : undefined,
       testConfig: testConfig.enabled ? testConfig : undefined,
       proxyConfig: proxyConfig.enabled ? proxyConfig : undefined,
       costMultiplier: pricingConfig.enabled
@@ -1098,6 +1123,12 @@ export function ProviderForm({
           ? true
           : undefined,
     };
+
+    if (!isCodexOauthProvider && "codexFastMode" in nextMeta) {
+      delete nextMeta.codexFastMode;
+    }
+
+    payload.meta = nextMeta;
 
     await onSubmit(payload);
   };
@@ -1557,6 +1588,8 @@ export function ProviderForm({
               isCodexOauthAuthenticated={isCodexOauthAuthenticated}
               selectedCodexAccountId={selectedCodexAccountId}
               onCodexAccountSelect={setSelectedCodexAccountId}
+              codexFastMode={codexFastMode}
+              onCodexFastModeChange={setCodexFastMode}
               templateValueEntries={templateValueEntries}
               templateValues={templateValues}
               templatePresetName={templatePreset?.name || ""}
@@ -1573,7 +1606,6 @@ export function ProviderForm({
               onAutoSelectChange={setEndpointAutoSelect}
               shouldShowModelSelector={category !== "official"}
               claudeModel={claudeModel}
-              reasoningModel={reasoningModel}
               defaultHaikuModel={defaultHaikuModel}
               defaultSonnetModel={defaultSonnetModel}
               defaultOpusModel={defaultOpusModel}
@@ -1706,6 +1738,25 @@ export function ProviderForm({
               onModelsChange={openclawForm.handleOpenclawModelsChange}
               userAgent={openclawForm.openclawUserAgent}
               onUserAgentChange={openclawForm.handleOpenclawUserAgentChange}
+            />
+          )}
+
+          {/* Hermes 专属字段 */}
+          {appId === "hermes" && (
+            <HermesFormFields
+              baseUrl={hermesForm.hermesBaseUrl}
+              onBaseUrlChange={hermesForm.handleHermesBaseUrlChange}
+              apiKey={hermesForm.hermesApiKey}
+              onApiKeyChange={hermesForm.handleHermesApiKeyChange}
+              category={category}
+              shouldShowApiKeyLink={false}
+              websiteUrl={""}
+              apiMode={hermesForm.hermesApiMode}
+              onApiModeChange={hermesForm.handleHermesApiModeChange}
+              models={hermesForm.hermesModels}
+              onModelsChange={hermesForm.handleHermesModelsChange}
+              rateLimitDelay={hermesForm.hermesRateLimitDelay}
+              onRateLimitDelayChange={hermesForm.handleHermesRateLimitDelayChange}
             />
           )}
 
